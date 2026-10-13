@@ -149,3 +149,7 @@ details.panel[open] > summary { margin-bottom: 14px; }
 .panel summary { list-style: none; }
 .panel summary::-webkit-details-marker { display: none; }
 @media (max-width: 860px) { .bars { gap: 6px; } }
+
+/* ---- Appearance override chosen in Settings (system is the default) ---- */
+:root[data-theme="light"] { color-scheme: light; --bg: #f4f5fa; --surface: #ffffff; --surface-2: #f8f9fc; --ink: #171a33; --muted: #6b7090; --line: #e4e6f0; --accent: #4b5be8; --accent-ink: #ffffff; --accent-soft: #eef0fe; --shadow: 0 1px 2px rgba(20, 24, 60, 0.05), 0 4px 16px rgba(20, 24, 60, 0.04); }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0f1126; --surface: #171a33; --surface-2: #1d2140; --ink: #eef0fb; --muted: #9499bd; --line: #2a2f55; --accent: #8795ff; --accent-ink: #0f1126; --accent-soft: #222a5a; --shadow: none; }

@@ -4,7 +4,9 @@ import { NoteForm } from '@/components/NoteForm';
 import { withUser } from '@/lib/db';
 import { getNote, listNotes, personalWorkspaceId } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
-import { isUuid } from '@/lib/time';
+import { getSettings } from '@/lib/settings';
+import { tagOptions } from '@/lib/tags';
+import { inputInZone, isUuid } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,11 +14,21 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
   const user = await getCurrentUser();
   const { q = '', id, new: creating } = await searchParams;
   const query = q.trim().slice(0, 100);
-  const { notes, selected } = await withUser(user!.id, async c => {
+
+  const data = await withUser(user!.id, async c => {
     const ws = await personalWorkspaceId(c, user!.id);
+    const settings = await getSettings(c, user!.id);
+    const selected = id && isUuid(id) ? await getNote(c, ws, id) : null;
+    const items = selected
+      ? (await c.query<{ id: string; text: string; done: boolean }>(
+          `select id, text, done from note_items where note_id = $1 order by sort_order, created_at`, [selected.id])).rows
+      : [];
     return {
       notes: await listNotes(c, ws, query),
-      selected: id && isUuid(id) ? await getNote(c, ws, id) : null,
+      selected,
+      items,
+      tags: await tagOptions(c, user!.id, 'note'),
+      timezone: settings.timezone,
     };
   });
   const keep = query ? `&q=${encodeURIComponent(query)}` : '';
@@ -26,7 +38,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
       <div className="page-head">
         <div>
           <h1>Notes</h1>
-          <p>{notes.length} {notes.length === 1 ? 'note' : 'notes'}</p>
+          <p>{data.notes.length} {data.notes.length === 1 ? 'note' : 'notes'}</p>
         </div>
         <div className="actions">
           <form method="get" style={{ display: 'flex' }}>
@@ -38,10 +50,10 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
 
       <section className="card split">
         <div className="list-pane">
-          {notes.length === 0 ? (
+          {data.notes.length === 0 ? (
             <div className="empty">{query ? 'No notes match your search.' : 'No notes yet.'}</div>
-          ) : notes.map(n => (
-            <Link key={n.id} href={`/notes?id=${n.id}${keep}`} className="note-item" aria-current={selected?.id === n.id ? 'true' : undefined}>
+          ) : data.notes.map(n => (
+            <Link key={n.id} href={`/notes?id=${n.id}${keep}`} className="note-item" aria-current={data.selected?.id === n.id ? 'true' : undefined}>
               <strong>{n.pinned ? '📌 ' : ''}{n.title || 'Untitled'}</strong>
               <div className="snip">{n.body || 'No text'}</div>
               <div className="small muted" style={{ marginTop: 6 }}><span className="badge">{n.tag}</span></div>
@@ -50,12 +62,13 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
         </div>
         <div className="editor-pane">
           {creating ? (
-            <NoteForm action={createNote} submitLabel="Create note" />
-          ) : selected ? (
+            <NoteForm action={createNote} submitLabel="Create note" tags={data.tags} />
+          ) : data.selected ? (
             <>
-              <NoteForm action={updateNote} submitLabel="Save changes" note={selected} />
+              <NoteForm action={updateNote} submitLabel="Save changes" note={data.selected} tags={data.tags} items={data.items}
+                reminder={inputInZone(data.selected.reminderAt, data.timezone)} />
               <form action={deleteNote} style={{ padding: '0 28px 24px' }}>
-                <input type="hidden" name="id" value={selected.id} />
+                <input type="hidden" name="id" value={data.selected.id} />
                 <button type="submit" className="btn danger">Delete note</button>
               </form>
             </>

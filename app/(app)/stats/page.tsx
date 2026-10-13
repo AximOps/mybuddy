@@ -1,7 +1,8 @@
 import { withUser } from '@/lib/db';
 import { personalWorkspaceId } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
-import { getSettings } from '@/lib/settings';
+import { getSettings, money } from '@/lib/settings';
+import { SPEND_CATEGORIES } from '@/lib/tags';
 import { dateKeyIn, shiftDateKey, weekdayOf } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -17,8 +18,8 @@ export default async function StatsPage() {
   // Five queries in total, whatever the number of days. Everything else is worked out in memory.
   const data = await withUser(user!.id, async c => {
     const ws = await personalWorkspaceId(c, user!.id);
-    const { timezone } = await getSettings(c, user!.id);
-    const today = dateKeyIn(timezone);
+    const settings = await getSettings(c, user!.id);
+    const today = dateKeyIn(settings.timezone);
     const from = shiftDateKey(today, -(STREAK_LOOKBACK - 1));
 
     const routineDays = await c.query<{ weekday: number; routine_id: string }>(
@@ -61,9 +62,25 @@ export default async function StatsPage() {
       else if (i > 0) break;
     }
 
+    const monthStart = `${today.slice(0, 8)}01`;
+    const spend = await c.query<{ category: string; total: number }>(
+      `select category, sum(amount_minor)::int as total from expenses
+        where user_id = $1 and spent_on >= $2 and spent_on <= $3 and deleted_at is null
+        group by category order by total desc`, [user!.id, monthStart, today]);
+    const todo = await c.query<{ open: number; overdue: number }>(
+      `select count(*) filter (where not done)::int as open,
+              count(*) filter (where not done and due_date < $2)::int as overdue
+         from tasks where workspace_id = $1 and deleted_at is null`, [ws, today]);
+    const notes = await c.query<{ total: number; pinned: number }>(
+      `select count(*)::int as total, count(*) filter (where pinned)::int as pinned
+         from notes where workspace_id = $1 and deleted_at is null`, [ws]);
+    const noteTags = await c.query<{ tag: string; n: number }>(
+      `select tag, count(*)::int as n from notes where workspace_id = $1 and deleted_at is null group by tag order by n desc`, [ws]);
+
     return {
-      week, streak,
+      week, streak, currency: settings.currency,
       focus: focus.rows[0], tasksDone: tasks.rows[0].n, routines: routines.rows[0].n,
+      spend: spend.rows, todo: todo.rows[0], notes: notes.rows[0], noteTags: noteTags.rows,
     };
   });
 
@@ -98,6 +115,39 @@ export default async function StatsPage() {
           ))}
         </div>
       </section>
+
+      <div className="layout-2" style={{ marginBottom: 20 }}>
+        <section className="card card-body">
+          <h2 style={{ marginBottom: 12 }}>Spending this month</h2>
+          {data.spend.length === 0 ? <p className="muted small">No spending recorded this month.</p> : (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {data.spend.map(r => {
+                const label = SPEND_CATEGORIES.find(c => c.id === r.category)?.label ?? `🏷️ ${r.category}`;
+                const max = data.spend[0].total;
+                return (
+                  <li key={r.category} style={{ padding: '8px 0' }}>
+                    <div className="actions" style={{ justifyContent: 'space-between' }}><span>{label}</span><span className="num">{money(r.total, data.currency)}</span></div>
+                    <div className="progress" style={{ marginTop: 6 }}><span style={{ width: `${Math.round((r.total / max) * 100)}%` }} /></div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+        <div className="stack">
+          <section className="card card-body">
+            <h2 style={{ marginBottom: 10 }}>To-do</h2>
+            <div className="small muted">Open tasks</div><div className="value num" style={{ fontSize: 22, fontWeight: 650 }}>{data.todo.open}</div>
+            <div className="small muted" style={{ marginTop: 10 }}>Overdue</div><div className="value num" style={{ fontSize: 22, fontWeight: 650, color: data.todo.overdue ? 'var(--danger)' : undefined }}>{data.todo.overdue}</div>
+          </section>
+          <section className="card card-body">
+            <h2 style={{ marginBottom: 10 }}>Notes</h2>
+            <div className="small muted">Total notes</div><div className="value num" style={{ fontSize: 22, fontWeight: 650 }}>{data.notes.total}</div>
+            <div className="small muted" style={{ marginTop: 10 }}>Pinned</div><div className="value num" style={{ fontSize: 22, fontWeight: 650 }}>{data.notes.pinned}</div>
+            <div className="actions" style={{ marginTop: 10 }}>{data.noteTags.map(t => <span key={t.tag} className="badge">{t.tag} · {t.n}</span>)}</div>
+          </section>
+        </div>
+      </div>
 
       <section className="card flush">
         <div className="card-head"><h2>Day by day</h2><span className="muted small">{data.routines} routines</span></div>

@@ -45,3 +45,37 @@ export function parseHM(s: unknown): number | null {
   if (h > 23 || mi > 59) return null;
   return h * 60 + mi;
 }
+
+function tzOffsetMs(tz: string, ms: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(ms));
+  const get = (t: string) => Number(parts.find(p => p.type === t)?.value);
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+  return asUtc - (ms - (ms % 1000));
+}
+
+/** A local date and time in a time zone ("2026-10-13T09:30") to epoch milliseconds. */
+export function zonedToUtc(local: string, tz: string): number {
+  const guess = Date.parse(`${local}:00Z`);
+  if (Number.isNaN(guess)) return NaN;
+  return guess - tzOffsetMs(tz, guess);
+}
+
+/** Money text from a decimal string such as "1234.50" to minor units, or null if invalid. */
+export function parseMoney(input: unknown): number | null {
+  const n = Number(String(input ?? '').replace(/,/g, '').trim());
+  if (!Number.isFinite(n) || n <= 0 || n > 999999) return null;
+  return Math.round(n * 100);
+}
+
+/** An epoch time as "YYYY-MM-DDTHH:mm" in a time zone, for datetime-local inputs. */
+export function inputInZone(iso: string | null, tz: string): string {
+  if (!iso) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+}

@@ -67,14 +67,13 @@ export async function listNotes(c: PoolClient, ws: string, q: string): Promise<P
   return rows.map(r => ({ id: r.id, title: r.title, body: r.body, tag: r.tag, pinned: r.pinned, updatedAt: r.updated_at.toISOString() }));
 }
 
-export async function getNote(c: PoolClient, ws: string, id: string): Promise<PlannerNote | null> {
-  const { rows } = await c.query<{ id: string; title: string; body: string; tag: string; pinned: boolean; updated_at: Date }>(
-    `select id, title, body, tag, pinned, updated_at from notes where workspace_id = $1 and id = $2 and deleted_at is null`, [ws, id]);
+export async function getNote(c: PoolClient, ws: string, id: string): Promise<(PlannerNote & { reminderAt: string | null }) | null> {
+  const { rows } = await c.query<{ id: string; title: string; body: string; tag: string; pinned: boolean; updated_at: Date; reminder_at: Date | null }>(
+    `select id, title, body, tag, pinned, updated_at, reminder_at from notes where workspace_id = $1 and id = $2 and deleted_at is null`, [ws, id]);
   const r = rows[0];
-  return r ? { id: r.id, title: r.title, body: r.body, tag: r.tag, pinned: r.pinned, updatedAt: r.updated_at.toISOString() } : null;
+  return r ? { id: r.id, title: r.title, body: r.body, tag: r.tag, pinned: r.pinned, updatedAt: r.updated_at.toISOString(), reminderAt: r.reminder_at ? r.reminder_at.toISOString() : null } : null;
 }
 
-export const TAGS = ['Personal', 'Work', 'Ideas', 'Health'] as const;
 
 export interface RoutineRow {
   id: string; name: string; color: string; days: number[];

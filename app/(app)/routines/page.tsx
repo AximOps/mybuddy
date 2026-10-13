@@ -1,4 +1,4 @@
-import { addActivity, createRoutine, deleteActivity, deleteRoutine, setRoutineDay, updateActivity, updateRoutine } from '@/app/actions';
+import { addActivity, copyRoutine, createRoutine, deleteActivity, deleteRoutine, setRoutineDay, updateActivity, updateRoutine } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listRoutines, personalWorkspaceId } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
@@ -50,10 +50,16 @@ export default async function RoutinesPage() {
                 </select>
                 <button className="btn sm" type="submit">Save</button>
               </form>
-              <form action={deleteRoutine}>
-                <input type="hidden" name="id" value={r.id} />
-                <button className="btn ghost sm danger" type="submit" disabled={routines.length < 2}>Delete routine</button>
-              </form>
+              <div className="actions">
+                <form action={copyRoutine}>
+                  <input type="hidden" name="routineId" value={r.id} />
+                  <button className="btn ghost sm" type="submit">Copy</button>
+                </form>
+                <form action={deleteRoutine}>
+                  <input type="hidden" name="id" value={r.id} />
+                  <button className="btn ghost sm danger" type="submit" disabled={routines.length < 2}>Delete routine</button>
+                </form>
+              </div>
             </div>
 
             <div className="card-body" style={{ borderBottom: '1px solid var(--line)' }}>
