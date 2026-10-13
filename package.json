@@ -10,6 +10,7 @@
     "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
+    "@neon/config": "^1.9.1",
     "better-auth": "^1.7.7",
     "next": "^16.4.0",
     "pg": "^8.23.1",
