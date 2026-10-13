@@ -1,0 +1,12 @@
+# Monorepo root: each app keeps its own rules in apps/*/.gitignore.
+# Secrets and local data are never committed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.mobileprovision
+.DS_Store
+Thumbs.db
