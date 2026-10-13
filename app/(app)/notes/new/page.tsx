@@ -1,11 +1,5 @@
-import { createNote } from '@/app/actions';
-import { NoteForm } from '@/components/NoteForm';
+import { redirect } from 'next/navigation';
 
-export default function NewNotePage() {
-  return (
-    <>
-      <h1>New note</h1>
-      <NoteForm action={createNote} submitLabel="Create note" />
-    </>
-  );
+export default function NewNoteRedirect() {
+  redirect('/notes?new=1');
 }

@@ -127,7 +127,7 @@ export async function createNote(formData: FormData) {
       [id, ws, title, body, tag, pinned, user.id]);
   });
   revalidatePath('/notes');
-  redirect(`/notes/${id}`);
+  redirect(`/notes?id=${id}`);
 }
 
 export async function updateNote(formData: FormData) {

@@ -1,24 +1,23 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
-import { SignOutButton } from '@/components/SignOutButton';
+import { Sidebar } from '@/components/Sidebar';
+import { APP_TZ } from '@/lib/time';
 import { getCurrentUser } from '@/lib/session';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
+  const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: APP_TZ });
   return (
-    <div className="shell">
-      <header className="topbar">
-        <Link href="/today" className="brand">My Buddy</Link>
-        <nav>
-          <Link href="/today">Today</Link>
-          <Link href="/tasks">Tasks</Link>
-          <Link href="/notes">Notes</Link>
-        </nav>
-        <SignOutButton />
-      </header>
-      <main className="wide">{children}</main>
+    <div className="app">
+      <Sidebar name={user.name} email={user.email} />
+      <div className="main">
+        <header className="topbar">
+          <span className="muted small">{todayLabel}</span>
+          <span className="muted small">Signed in as {user.email}</span>
+        </header>
+        <div className="content">{children}</div>
+      </div>
     </div>
   );
 }
