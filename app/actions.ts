@@ -158,3 +158,147 @@ export async function deleteNote(formData: FormData) {
   revalidatePath('/notes');
   redirect('/notes');
 }
+
+/* ---------- Routines ---------- */
+
+const COLOR = /^#[0-9a-f]{6}$/i;
+
+async function workspaceFor(c: import('pg').PoolClient, userId: string) {
+  return personalWorkspaceId(c, userId);
+}
+
+export async function createRoutine(formData: FormData) {
+  const user = await requireUser();
+  const name = text(formData.get('name'), 60);
+  const color = String(formData.get('color') ?? '');
+  if (!name) return;
+  await withUser(user.id, async c => {
+    const ws = await workspaceFor(c, user.id);
+    await c.query(
+      `insert into routines (id, workspace_id, name, color, sort_order, created_by)
+       values ($1, $2, $3, $4, (select coalesce(max(sort_order), -1) + 1 from routines where workspace_id = $2), $5)`,
+      [randomUUID(), ws, name, COLOR.test(color) ? color : '#4B5BE8', user.id]);
+  });
+  revalidatePath('/routines');
+}
+
+export async function updateRoutine(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  const name = text(formData.get('name'), 60);
+  const color = String(formData.get('color') ?? '');
+  if (!isUuid(id) || !name) return;
+  await withUser(user.id, async c => {
+    await c.query(`update routines set name = $2, color = $3 where id = $1`, [id, name, COLOR.test(color) ? color : '#4B5BE8']);
+  });
+  revalidatePath('/routines');
+  revalidatePath('/today');
+}
+
+/** Gives one weekday to a routine. A weekday always belongs to exactly one routine. */
+export async function setRoutineDay(formData: FormData) {
+  const user = await requireUser();
+  const routineId = String(formData.get('routineId') ?? '');
+  const weekday = Number(formData.get('weekday'));
+  if (!isUuid(routineId) || !Number.isInteger(weekday) || weekday < 0 || weekday > 6) return;
+  await withUser(user.id, async c => {
+    const ws = await workspaceFor(c, user.id);
+    const current = await c.query<{ routine_id: string }>(
+      `select routine_id from routine_days where workspace_id = $1 and weekday = $2 and deleted_at is null`, [ws, weekday]);
+    if (current.rows[0]?.routine_id === routineId) {
+      // Already this routine: clicking again moves the day to the first other routine, so no day is left empty.
+      const other = await c.query<{ id: string }>(
+        `select id from routines where workspace_id = $1 and id <> $2 and deleted_at is null order by sort_order limit 1`, [ws, routineId]);
+      if (!other.rows[0]) return;
+      await c.query(`update routine_days set routine_id = $3 where workspace_id = $1 and weekday = $2`, [ws, weekday, other.rows[0].id]);
+      return;
+    }
+    await c.query(
+      `insert into routine_days (workspace_id, weekday, routine_id) values ($1, $2, $3)
+       on conflict (workspace_id, weekday) do update set routine_id = excluded.routine_id, deleted_at = null`,
+      [ws, weekday, routineId]);
+  });
+  revalidatePath('/routines');
+  revalidatePath('/today');
+}
+
+/** Deletes a routine and its activities. Its weekdays move to the first remaining routine. */
+export async function deleteRoutine(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    const ws = await workspaceFor(c, user.id);
+    const other = await c.query<{ id: string }>(
+      `select id from routines where workspace_id = $1 and id <> $2 and deleted_at is null order by sort_order limit 1`, [ws, id]);
+    if (!other.rows[0]) return; // keep at least one routine
+    await c.query(`update routine_days set routine_id = $3 where workspace_id = $1 and routine_id = $2`, [ws, id, other.rows[0].id]);
+    await c.query(`update events set deleted_at = now() where routine_id = $1`, [id]);
+    await c.query(`update routines set deleted_at = now() where id = $1`, [id]);
+  });
+  revalidatePath('/routines');
+  revalidatePath('/today');
+}
+
+export async function addActivity(formData: FormData) {
+  const user = await requireUser();
+  const routineId = String(formData.get('routineId') ?? '');
+  const title = text(formData.get('title'), 120);
+  const emoji = text(formData.get('emoji'), 8) || '📌';
+  const start = parseHM(formData.get('start'));
+  const end = parseHM(formData.get('end'));
+  const category = text(formData.get('category'), 20) || 'personal';
+  if (!isUuid(routineId) || !title || start === null || end === null || end <= start) return;
+  await withUser(user.id, async c => {
+    const ws = await workspaceFor(c, user.id);
+    await c.query(
+      `insert into events (id, workspace_id, routine_id, title, emoji, start_min, end_min, category, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [randomUUID(), ws, routineId, title, emoji, start, end, category, user.id]);
+  });
+  revalidatePath('/routines');
+  revalidatePath('/today');
+}
+
+export async function updateActivity(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  const title = text(formData.get('title'), 120);
+  const emoji = text(formData.get('emoji'), 8) || '📌';
+  const start = parseHM(formData.get('start'));
+  const end = parseHM(formData.get('end'));
+  if (!isUuid(id) || !title || start === null || end === null || end <= start) return;
+  await withUser(user.id, async c => {
+    await c.query(`update events set title = $2, emoji = $3, start_min = $4, end_min = $5 where id = $1`, [id, title, emoji, start, end]);
+  });
+  revalidatePath('/routines');
+  revalidatePath('/today');
+}
+
+export async function deleteActivity(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    await c.query(`update events set deleted_at = now() where id = $1`, [id]);
+  });
+  revalidatePath('/routines');
+  revalidatePath('/today');
+}
+
+/* ---------- Focus ---------- */
+
+/** Records a focus session that finished in the browser. */
+export async function recordFocusSession(formData: FormData) {
+  const user = await requireUser();
+  const title = text(formData.get('title'), 60);
+  const minutes = Number(formData.get('minutes'));
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 480) return;
+  await withUser(user.id, async c => {
+    const ws = await workspaceFor(c, user.id);
+    await c.query(
+      `insert into focus_sessions (id, workspace_id, user_id, title, minutes) values ($1, $2, $3, $4, $5)`,
+      [randomUUID(), ws, user.id, title, minutes]);
+  });
+  revalidatePath('/stats');
+}

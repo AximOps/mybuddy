@@ -75,3 +75,26 @@ export async function getNote(c: PoolClient, ws: string, id: string): Promise<Pl
 }
 
 export const TAGS = ['Personal', 'Work', 'Ideas', 'Health'] as const;
+
+export interface RoutineRow {
+  id: string; name: string; color: string; days: number[];
+  events: { id: string; title: string; emoji: string; startMin: number; endMin: number; category: string }[];
+}
+
+/** All routines in a workspace, with the weekdays they cover and their activities. */
+export async function listRoutines(c: PoolClient, ws: string): Promise<RoutineRow[]> {
+  const routines = await c.query<{ id: string; name: string; color: string }>(
+    `select id, name, color from routines where workspace_id = $1 and deleted_at is null order by sort_order`, [ws]);
+  const days = await c.query<{ routine_id: string; weekday: number }>(
+    `select routine_id, weekday from routine_days where workspace_id = $1 and deleted_at is null order by weekday`, [ws]);
+  const events = await c.query<{ id: string; routine_id: string; title: string; emoji: string; start_min: number; end_min: number; category: string }>(
+    `select id, routine_id, title, emoji, start_min, end_min, category from events
+      where workspace_id = $1 and deleted_at is null order by start_min`, [ws]);
+  return routines.rows.map(r => ({
+    id: r.id, name: r.name, color: r.color,
+    days: days.rows.filter(d => d.routine_id === r.id).map(d => d.weekday),
+    events: events.rows.filter(e => e.routine_id === r.id).map(e => ({
+      id: e.id, title: e.title, emoji: e.emoji, startMin: e.start_min, endMin: e.end_min, category: e.category,
+    })),
+  }));
+}

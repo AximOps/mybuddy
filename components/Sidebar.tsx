@@ -2,14 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarDays, ListChecks, LogOut, NotebookPen } from 'lucide-react';
+import { BarChart3, CalendarDays, ListChecks, LogOut, NotebookPen, Repeat, Timer } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
 
 const ITEMS = [
   { href: '/today', label: 'Today', icon: CalendarDays },
+  { href: '/focus', label: 'Focus', icon: Timer },
   { href: '/tasks', label: 'To-Do', icon: ListChecks },
   { href: '/notes', label: 'Notes', icon: NotebookPen },
+  { href: '/routines', label: 'Routines', icon: Repeat },
+  { href: '/stats', label: 'Stats', icon: BarChart3 },
 ];
 
 export function Sidebar({ name, email }: { name: string; email: string }) {
