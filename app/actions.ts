@@ -302,3 +302,32 @@ export async function recordFocusSession(formData: FormData) {
   });
   revalidatePath('/stats');
 }
+
+/* ---------- Settings ---------- */
+
+export async function updateProfile(formData: FormData) {
+  const user = await requireUser();
+  const name = text(formData.get('name'), 80);
+  if (!name) return;
+  await withUser(user.id, async c => {
+    await c.query(`update "user" set name = $2, "updatedAt" = now() where id = $1`, [user.id, name]);
+  });
+  revalidatePath('/settings');
+}
+
+export async function updateSettings(formData: FormData) {
+  const user = await requireUser();
+  const tz = text(formData.get('timezone'), 60);
+  const currency = text(formData.get('currency'), 3);
+  const { isValidTimezone, CURRENCIES } = await import('@/lib/settings');
+  if (!isValidTimezone(tz) || !(CURRENCIES as readonly string[]).includes(currency)) return;
+  await withUser(user.id, async c => {
+    await c.query(
+      `insert into user_settings (user_id, timezone, currency) values ($1, $2, $3)
+       on conflict (user_id) do update set timezone = excluded.timezone, currency = excluded.currency, updated_at = now()`,
+      [user.id, tz, currency]);
+  });
+  revalidatePath('/settings');
+  revalidatePath('/today');
+  revalidatePath('/stats');
+}

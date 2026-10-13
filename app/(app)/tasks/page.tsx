@@ -3,7 +3,8 @@ import { addTask, deleteTask, setTaskDone } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listTasks, personalWorkspaceId } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
-import { APP_TZ, dateKeyIn, fmtMinutes } from '@/lib/time';
+import { dateKeyIn, fmtMinutes } from '@/lib/time';
+import { getSettings } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,9 +14,11 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const user = await getCurrentUser();
   const { status: requested } = await searchParams;
   const status: Status = requested === 'done' || requested === 'all' ? requested : 'open';
-  const tasks = await withUser(user!.id, async c => listTasks(c, await personalWorkspaceId(c, user!.id)));
+  const { tasks, today } = await withUser(user!.id, async c => {
+    const { timezone } = await getSettings(c, user!.id);
+    return { tasks: await listTasks(c, await personalWorkspaceId(c, user!.id)), today: dateKeyIn(timezone) };
+  });
 
-  const today = dateKeyIn(APP_TZ);
   const open = tasks.filter(t => !t.done);
   const overdue = open.filter(t => t.dueDate !== null && t.dueDate < today).length;
   const shown = status === 'open' ? open : status === 'done' ? tasks.filter(t => t.done) : tasks;

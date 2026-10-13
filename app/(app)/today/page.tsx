@@ -3,22 +3,23 @@ import { addEvent, toggleEvent } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listTasks, personalWorkspaceId, routineForDay } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
-import { APP_TZ, dateKeyIn, fmtMinutes, isDateKey, longDate, shiftDateKey, weekdayOf } from '@/lib/time';
+import { fmtMinutes, dateKeyIn, isDateKey, longDate, shiftDateKey, weekdayOf } from '@/lib/time';
+import { getSettings } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const user = await getCurrentUser();
   const { day: requested } = await searchParams;
-  const today = dateKeyIn(APP_TZ);
-  const day = isDateKey(requested) ? requested : today;
-
-  const { routineName, events, dueTasks } = await withUser(user!.id, async c => {
+  const { routineName, events, dueTasks, today, day } = await withUser(user!.id, async c => {
+    const { timezone } = await getSettings(c, user!.id);
+    const todayKey = dateKeyIn(timezone);
+    const dayKey = isDateKey(requested) ? requested : todayKey;
     const ws = await personalWorkspaceId(c, user!.id);
-    const routine = await routineForDay(c, ws, user!.id, weekdayOf(day), day);
+    const routine = await routineForDay(c, ws, user!.id, weekdayOf(dayKey), dayKey);
     const tasks = (await listTasks(c, ws)).filter(t =>
-      !t.done && t.dueDate !== null && (t.dueDate === day || (day === today && t.dueDate < today)));
-    return { ...routine, dueTasks: tasks };
+      !t.done && t.dueDate !== null && (t.dueDate === dayKey || (dayKey === todayKey && t.dueDate < todayKey)));
+    return { ...routine, dueTasks: tasks, today: todayKey, day: dayKey };
   });
 
   const done = events.filter(e => e.done).length;
