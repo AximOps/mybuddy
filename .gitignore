@@ -1,12 +1,34 @@
-# Monorepo root: each app keeps its own rules in apps/*/.gitignore.
-# Secrets and local data are never committed.
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js build output
+.next/
+out/
+build/
+
+# local environment and secrets (keep the example file in git)
 .env
 .env.*
 !.env.example
-*.pem
-*.key
-*.p8
-*.p12
-*.mobileprovision
+.env*.local
+
+# typescript incremental build info
+*.tsbuildinfo
+
+# deployment
+.vercel
+
+# logs and debug files
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.log
+
+# OS and editor files
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
+*.swp

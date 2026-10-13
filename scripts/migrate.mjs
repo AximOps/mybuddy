@@ -1,13 +1,32 @@
-// Runs every SQL file in db/migrations, in name order, inside one transaction each.
-// Usage: DATABASE_URL=... node scripts/migrate.mjs
-import { readFileSync, readdirSync } from 'node:fs';
+// Applies every SQL file in db/migrations, in name order, once each.
+//
+// Migrations must run as the database OWNER (for Neon, the role created with the project),
+// because they create tables, functions and the app role. The app itself uses the restricted
+// mybuddy_app role, so keep the two connection strings separate:
+//
+//   MIGRATION_DATABASE_URL  owner connection string, used only by this script
+//   DATABASE_URL            mybuddy_app connection string, used by the web app
+//
+// Values are read from the shell first, then from .env.local, then from .env.
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import pg from 'pg';
 
-const url = process.env.DATABASE_URL;
-if (!url) { console.error('DATABASE_URL is not set.'); process.exit(1); }
+const root = join(import.meta.dirname, '..');
+for (const file of ['.env.local', '.env']) {
+  const path = join(root, file);
+  if (existsSync(path)) process.loadEnvFile(path);
+}
 
-const dir = join(import.meta.dirname, '..', 'db', 'migrations');
+const url = process.env.MIGRATION_DATABASE_URL;
+if (!url) {
+  console.error('MIGRATION_DATABASE_URL is not set.');
+  console.error('Add the owner connection string to .env.local, for example:');
+  console.error('  MIGRATION_DATABASE_URL=postgresql://neondb_owner:...@ep-xxxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require');
+  process.exit(1);
+}
+
+const dir = join(root, 'db', 'migrations');
 const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {

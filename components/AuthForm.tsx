@@ -18,16 +18,16 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
     e.preventDefault();
     setBusy(true); setError(null);
     const result = mode === 'signup'
-      ? await authClient.signUp.email({ name, email, password, callbackURL: '/dashboard' })
-      : await authClient.signIn.email({ email, password, callbackURL: '/dashboard' });
+      ? await authClient.signUp.email({ name, email, password, callbackURL: '/today' })
+      : await authClient.signIn.email({ email, password, callbackURL: '/today' });
     setBusy(false);
     if (result.error) { setError(result.error.message ?? 'Something went wrong. Please try again.'); return; }
-    router.push('/dashboard');
+    router.push('/today');
   };
 
   const social = async (provider: 'google' | 'apple') => {
     setError(null);
-    const result = await authClient.signIn.social({ provider, callbackURL: '/dashboard' });
+    const result = await authClient.signIn.social({ provider, callbackURL: '/today' });
     if (result?.error) setError(result.error.message ?? 'Sign-in did not finish.');
   };
 
