@@ -11,15 +11,22 @@ export const dynamic = 'force-dynamic';
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const user = await getCurrentUser();
   const { day: requested } = await searchParams;
-  const { routineName, events, dueTasks, today, day } = await withUser(user!.id, async c => {
+  const { routineName, events, dueTasks, today, day, student } = await withUser(user!.id, async c => {
     const { timezone } = await getSettings(c, user!.id);
     const todayKey = dateKeyIn(timezone);
     const dayKey = isDateKey(requested) ? requested : todayKey;
     const ws = await personalWorkspaceId(c, user!.id);
+    const settings = await getSettings(c, user!.id);
     const routine = await routineForDay(c, ws, user!.id, weekdayOf(dayKey), dayKey);
     const tasks = (await listTasks(c, ws)).filter(t =>
       !t.done && t.dueDate !== null && (t.dueDate === dayKey || (dayKey === todayKey && t.dueDate < todayKey)));
-    return { ...routine, dueTasks: tasks, today: todayKey, day: dayKey };
+    let student = { classes: [] as { title: string; kind: string; start_min: number; end_min: number; room: string }[], deadlines: [] as { title: string; kind: string; due_date: string; due_time: number | null }[], exams: [] as { title: string; due_date: string }[] };
+    if (settings.studentEnabled) {
+      student.classes = (await c.query(`select title, kind, start_min, end_min, room from classes where workspace_id = $1 and weekday = $2 and deleted_at is null order by start_min`, [ws, weekdayOf(dayKey)])).rows;
+      student.deadlines = (await c.query(`select title, kind, due_date::text as due_date, due_time from deadlines where workspace_id = $1 and done = false and deleted_at is null and (due_date = $2 or ($3 and due_date < $2)) order by due_date, coalesce(due_time, 1440)`, [ws, dayKey, dayKey === todayKey])).rows;
+      student.exams = (await c.query(`select title, due_date::text as due_date from deadlines where workspace_id = $1 and kind = 'exam' and done = false and deleted_at is null and due_date > $2 and due_date <= ($2::date + 14) order by due_date`, [ws, dayKey])).rows;
+    }
+    return { ...routine, dueTasks: tasks, today: todayKey, day: dayKey, student };
   });
 
   const done = events.filter(e => e.done).length;
@@ -101,6 +108,17 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             <section className="card next-up card-body">
               <div className="small">Next up · {fmtMinutes(next.startMin)}</div>
               <div style={{ fontSize: 18, fontWeight: 650, marginTop: 4 }}>{next.emoji} {next.title}</div>
+            </section>
+          ) : null}
+
+          {student.classes.length || student.deadlines.length || student.exams.length ? (
+            <section className="card flush">
+              <div className="card-head"><h2>Student</h2><Link className="small muted" href="/student">Open</Link></div>
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {student.classes.map((c, i) => <li key={`c${i}`} className="card-body" style={{ borderTop: '1px solid var(--line)' }}><div style={{ fontWeight: 550 }}>📚 {c.title}</div><div className="small muted">{c.kind} · {fmtMinutes(c.start_min)} – {fmtMinutes(c.end_min)}{c.room ? ` · ${c.room}` : ''}</div></li>)}
+                {student.deadlines.map((d, i) => <li key={`d${i}`} className="card-body" style={{ borderTop: '1px solid var(--line)' }}><div style={{ fontWeight: 550 }}>{d.kind === 'exam' ? '📝' : '📌'} {d.title}</div><div className="small muted">{d.kind} · due {d.due_date}{d.due_time !== null ? ` ${fmtMinutes(d.due_time)}` : ''}</div></li>)}
+                {student.exams.map((x, i) => <li key={`x${i}`} className="card-body" style={{ borderTop: '1px solid var(--line)' }}><div style={{ fontWeight: 550 }}>⏳ {x.title}</div><div className="small muted">Exam on {x.due_date}</div></li>)}
+              </ul>
             </section>
           ) : null}
 

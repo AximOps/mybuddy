@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, CalendarDays, ListChecks, NotebookPen, Repeat, Settings, Timer, Wallet } from 'lucide-react';
+import { BarChart3, CalendarDays, GraduationCap, ListChecks, NotebookPen, Repeat, Settings, Timer, Wallet } from 'lucide-react';
 import { LogoutButton } from './LogoutButton';
 
 const ITEMS = [
@@ -17,8 +17,11 @@ const ITEMS = [
 ];
 
 /** Side navigation on desktop, and a bottom bar with the same links on phones. */
-export function Sidebar({ name, email }: { name: string; email: string }) {
+export function Sidebar({ name, email, showStudent }: { name: string; email: string; showStudent: boolean }) {
   const pathname = usePathname();
+  const items = showStudent
+    ? [...ITEMS.slice(0, 3), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(3)]
+    : ITEMS;
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   return (
     <>
@@ -28,7 +31,7 @@ export function Sidebar({ name, email }: { name: string; email: string }) {
           My Buddy
         </div>
         <nav className="nav" aria-label="Main">
-          {ITEMS.map(item => {
+          {items.map(item => {
             const Icon = item.icon;
             return (
               <Link key={item.href} href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
@@ -48,7 +51,7 @@ export function Sidebar({ name, email }: { name: string; email: string }) {
       </aside>
 
       <nav className="mobile-nav" aria-label="Main">
-        {ITEMS.map(item => {
+        {items.map(item => {
           const Icon = item.icon;
           return (
             <Link key={item.href} href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>

@@ -539,3 +539,148 @@ export async function resetAllData(formData: FormData) {
   });
   revalidatePath('/', 'layout');
 }
+
+/* ---------- Student: subjects, marks, classes, deadlines ---------- */
+
+const num = (v: FormDataEntryValue | null) => {
+  const n = Number(String(v ?? '').trim());
+  return String(v ?? '').trim() === '' || !Number.isFinite(n) ? null : n;
+};
+const optionalUuid = (v: FormDataEntryValue | null) => (isUuid(String(v ?? '')) ? String(v) : null);
+
+export async function addSubject(formData: FormData) {
+  const user = await requireUser();
+  const name = text(formData.get('name'), 60);
+  const credits = num(formData.get('credits')) ?? 0;
+  const gp = num(formData.get('gradePoint'));
+  if (!name || credits < 0 || credits > 30 || (gp !== null && (gp < 0 || gp > 10))) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(`insert into subjects (id, workspace_id, name, credits, grade_point, created_by) values ($1, $2, $3, $4, $5, $6)`,
+      [randomUUID(), ws, name, credits, gp, user.id]);
+  });
+  revalidatePath('/student');
+}
+
+export async function updateSubject(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  const name = text(formData.get('name'), 60);
+  const credits = num(formData.get('credits')) ?? 0;
+  const gp = num(formData.get('gradePoint'));
+  if (!isUuid(id) || !name || credits < 0 || credits > 30 || (gp !== null && (gp < 0 || gp > 10))) return;
+  await withUser(user.id, async c => {
+    await c.query(`update subjects set name = $2, credits = $3, grade_point = $4, updated_at = now() where id = $1`, [id, name, credits, gp]);
+  });
+  revalidatePath('/student');
+  revalidatePath(`/student/subjects/${id}`);
+}
+
+export async function deleteSubject(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    await c.query(`update subjects set deleted_at = now() where id = $1`, [id]);
+  });
+  revalidatePath('/student');
+  redirect('/student?tab=subjects');
+}
+
+export async function addMark(formData: FormData) {
+  const user = await requireUser();
+  const subjectId = String(formData.get('subjectId') ?? '');
+  const title = text(formData.get('title'), 80);
+  const score = num(formData.get('score'));
+  const max = num(formData.get('maxScore'));
+  if (!isUuid(subjectId) || !title || score === null || max === null || max <= 0 || score < 0 || score > max) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(`insert into assessments (id, workspace_id, subject_id, title, score, max_score) values ($1, $2, $3, $4, $5, $6)`,
+      [randomUUID(), ws, subjectId, title, score, max]);
+  });
+  revalidatePath(`/student/subjects/${subjectId}`);
+  revalidatePath('/student');
+}
+
+export async function deleteMark(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  const subjectId = String(formData.get('subjectId') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    await c.query(`update assessments set deleted_at = now() where id = $1`, [id]);
+  });
+  revalidatePath(`/student/subjects/${subjectId}`);
+  revalidatePath('/student');
+}
+
+export async function addClass(formData: FormData) {
+  const user = await requireUser();
+  const title = text(formData.get('title'), 60);
+  const kind = String(formData.get('kind') ?? 'lecture');
+  const weekday = Number(formData.get('weekday'));
+  const start = parseHM(formData.get('start'));
+  const end = parseHM(formData.get('end'));
+  const room = text(formData.get('room'), 20);
+  if (!title || !['lecture', 'lab', 'tutorial'].includes(kind) || !Number.isInteger(weekday) || weekday < 0 || weekday > 6 || start === null || end === null || end <= start) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(
+      `insert into classes (id, workspace_id, subject_id, title, kind, weekday, start_min, end_min, room) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [randomUUID(), ws, optionalUuid(formData.get('subjectId')), title, kind, weekday, start, end, room]);
+  });
+  revalidatePath('/student');
+  revalidatePath('/today');
+}
+
+export async function deleteClass(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    await c.query(`update classes set deleted_at = now() where id = $1`, [id]);
+  });
+  revalidatePath('/student');
+  revalidatePath('/today');
+}
+
+export async function addDeadline(formData: FormData) {
+  const user = await requireUser();
+  const title = text(formData.get('title'), 120);
+  const kind = String(formData.get('kind') ?? 'assignment');
+  const dueDate = String(formData.get('dueDate') ?? '');
+  const dueTime = formData.get('dueTime') ? parseHM(formData.get('dueTime')) : null;
+  if (!title || !['assignment', 'exam'].includes(kind) || !isDateKey(dueDate)) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(
+      `insert into deadlines (id, workspace_id, subject_id, title, kind, due_date, due_time, created_by) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [randomUUID(), ws, optionalUuid(formData.get('subjectId')), title, kind, dueDate, dueTime, user.id]);
+  });
+  revalidatePath('/student');
+  revalidatePath('/today');
+}
+
+export async function toggleDeadline(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  const done = formData.get('done') === 'true';
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    await c.query(`update deadlines set done = $2, updated_at = now() where id = $1`, [id, done]);
+  });
+  revalidatePath('/student');
+  revalidatePath('/today');
+}
+
+export async function deleteDeadline(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    await c.query(`update deadlines set deleted_at = now() where id = $1`, [id]);
+  });
+  revalidatePath('/student');
+  revalidatePath('/today');
+}
