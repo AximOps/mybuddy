@@ -72,7 +72,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           ) : (
             <table className="table">
               <thead>
-                <tr><th className="check-col" aria-label="Done" /><th>Time</th><th>Activity</th><th>Category</th></tr>
+                <tr><th className="check-col" aria-label="Done" /><th>Time</th><th>Activity</th><th className="hide-sm">Category</th></tr>
               </thead>
               <tbody>
                 {events.map(e => (
@@ -88,7 +88,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                     </td>
                     <td className="time">{fmtMinutes(e.startMin)} – {fmtMinutes(e.endMin)}</td>
                     <td><span className="title">{e.emoji} {e.title}</span></td>
-                    <td><span className="badge">{e.category}</span></td>
+                    <td className="hide-sm"><span className="badge">{e.category}</span></td>
                   </tr>
                 ))}
               </tbody>

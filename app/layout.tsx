@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
 import './globals.css';
+export { viewport } from './page-viewport';
 
 export const metadata = { title: 'My Buddy', description: 'Plan your day, buddy.' };
 

@@ -54,7 +54,7 @@ p { margin: 0; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .card-body { padding: 16px 18px; }
-.card.flush { overflow: hidden; }
+.card.flush { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; }
 .table th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 10px 18px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
 .table td { padding: 12px 18px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -153,3 +153,57 @@ details.panel[open] > summary { margin-bottom: 14px; }
 /* ---- Appearance override chosen in Settings (system is the default) ---- */
 :root[data-theme="light"] { color-scheme: light; --bg: #f4f5fa; --surface: #ffffff; --surface-2: #f8f9fc; --ink: #171a33; --muted: #6b7090; --line: #e4e6f0; --accent: #4b5be8; --accent-ink: #ffffff; --accent-soft: #eef0fe; --shadow: 0 1px 2px rgba(20, 24, 60, 0.05), 0 4px 16px rgba(20, 24, 60, 0.04); }
 :root[data-theme="dark"] { color-scheme: dark; --bg: #0f1126; --surface: #171a33; --surface-2: #1d2140; --ink: #eef0fb; --muted: #9499bd; --line: #2a2f55; --accent: #8795ff; --accent-ink: #0f1126; --accent-soft: #222a5a; --shadow: none; }
+
+/* ---- Mobile and tablet layout ---- */
+.mobile-nav, .mobile-only, .mobile-brand { display: none; }
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .desktop-only { display: none; }
+  .mobile-only { display: inline-flex; }
+  .mobile-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+  .topbar { height: 52px; padding: 0 16px; }
+  .content { padding: 18px 14px calc(96px + env(safe-area-inset-bottom)); }
+  .page-head { flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 16px; }
+  .page-head h1 { font-size: 22px; }
+  .actions { flex-wrap: wrap; }
+  .actions .input { width: 100% !important; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat { padding: 12px 14px; }
+  .stat .value { font-size: 20px; }
+  .form-grid { grid-template-columns: 1fr; gap: 10px; }
+  .form-grid > * { grid-column: 1 / -1 !important; }
+  .card-head { flex-wrap: wrap; }
+  .table td, .table th { padding: 10px 12px; }
+  .table .time { width: auto; }
+  .split { grid-template-columns: 1fr; height: auto; min-height: 0; }
+  .split .list-pane { max-height: 280px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .split .editor-pane { overflow: visible; }
+  .editor { padding: 16px; }
+  .textarea-large, textarea { min-height: 220px; }
+  .bars { height: 170px; gap: 6px; }
+  .bar-col .small { font-size: 11px; }
+  .btn { height: 42px; }
+  .btn.sm { height: 34px; }
+  .input, .select, textarea { height: 44px; font-size: 16px; }
+  textarea { height: auto; }
+  .input.title-input { height: 48px; font-size: 20px; }
+  .check { width: 26px; height: 26px; }
+  .mobile-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; overflow-x: auto; gap: 2px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); scrollbar-width: none; }
+  .mobile-nav::-webkit-scrollbar { display: none; }
+  .mobile-nav a { flex: 0 0 auto; min-width: 66px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 8px; border-radius: 10px; color: var(--muted); font-size: 11px; font-weight: 600; }
+  .mobile-nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+  .hide-sm { display: none; }
+  .auth-form { padding: 24px 18px; }
+  .auth-card { max-width: 100%; }
+}
+@media (max-width: 480px) {
+  .stats { grid-template-columns: 1fr 1fr; }
+  .stat .label { font-size: 11px; }
+  .stat .value { font-size: 18px; }
+  .content h1 { font-size: 20px; }
+  .timeline-row { grid-template-columns: 1fr; }
+  .routine-edit-row { grid-template-columns: 1fr !important; }
+  .routine-edit-row > * { width: 100%; }
+}

@@ -89,8 +89,8 @@ export default async function RoutinesPage() {
                   {r.events.map(e => (
                     <tr key={e.id}>
                       <td colSpan={5} style={{ padding: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px' }}>
-                          <form action={updateActivity} style={{ display: 'grid', flex: 1, gridTemplateColumns: '60px 1fr 150px 150px auto', gap: 8, alignItems: 'center' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '10px 18px' }}>
+                          <form action={updateActivity} className="routine-edit-row" style={{ display: 'grid', flex: 1, gridTemplateColumns: '60px 1fr 150px 150px auto', gap: 8, alignItems: 'center' }}>
                             <input type="hidden" name="id" value={e.id} />
                             <input className="input" name="emoji" defaultValue={e.emoji} maxLength={8} aria-label="Icon" />
                             <input className="input" name="title" defaultValue={e.title} maxLength={120} required aria-label="Activity" />
