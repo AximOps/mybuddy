@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Repeat, Settings, Timer, Wallet } from 'lucide-react';
+import { BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Repeat, Settings, Timer, Users, Wallet } from 'lucide-react';
 import { LogoutButton } from './LogoutButton';
 
 const ITEMS = [
@@ -13,6 +13,7 @@ const ITEMS = [
   { href: '/routines', label: 'Routines', icon: Repeat },
   { href: '/spend', label: 'Spending', icon: Wallet },
   { href: '/stats', label: 'Stats', icon: BarChart3 },
+  { href: '/organisation', label: 'Team', icon: Users },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

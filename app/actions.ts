@@ -922,3 +922,114 @@ export async function createInvoice(formData: FormData) {
   });
   revalidatePath('/work');
 }
+
+/* ---------- Organisations ---------- */
+
+const ROLES = ['owner', 'admin', 'member'] as const;
+type OrgRole = (typeof ROLES)[number];
+
+async function orgRoleOf(c: import('pg').PoolClient, orgId: string, userId: string): Promise<OrgRole | null> {
+  const { rows } = await c.query<{ role: OrgRole }>(
+    `select role from organisation_members where organisation_id = $1 and user_id = $2`, [orgId, userId]);
+  return rows[0]?.role ?? null;
+}
+
+export async function createOrganisation(formData: FormData) {
+  const user = await requireUser();
+  const name = text(formData.get('name'), 120);
+  if (!name) return;
+  await withUser(user.id, async c => {
+    await c.query(`select create_organisation($1, $2)`, [user.id, name]);
+  });
+  revalidatePath('/organisation');
+}
+
+export async function inviteMember(formData: FormData) {
+  const user = await requireUser();
+  const orgId = String(formData.get('orgId') ?? '');
+  const email = text(formData.get('email'), 254).toLowerCase();
+  const role = String(formData.get('role') ?? 'member') as OrgRole;
+  if (!isUuid(orgId) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !ROLES.includes(role)) return;
+  const { newInviteToken, INVITE_DAYS, inviteUrl } = await import('@/lib/invite');
+  const { token, hash } = newInviteToken();
+  let link = '';
+  await withUser(user.id, async c => {
+    const mine = await orgRoleOf(c, orgId, user.id);
+    if (!mine || mine === 'member') return;
+    if (role === 'owner' && mine !== 'owner') return;
+    await c.query(
+      `insert into invitations (id, organisation_id, email, role, token_hash, invited_by, expires_at)
+       values ($1, $2, $3, $4, $5, $6, now() + ($7 || ' days')::interval)`,
+      [randomUUID(), orgId, email, role, hash, user.id, String(INVITE_DAYS)]);
+    link = inviteUrl(token);
+  });
+  revalidatePath('/organisation');
+  if (link) redirect(`/organisation?invited=${encodeURIComponent(link)}`);
+}
+
+export async function revokeInvite(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    await c.query(`delete from invitations where id = $1`, [id]);
+  });
+  revalidatePath('/organisation');
+}
+
+export async function acceptInvitation(formData: FormData) {
+  const user = await requireUser();
+  const { hashToken } = await import('@/lib/invite');
+  const token = String(formData.get('token') ?? '');
+  if (!token) redirect('/organisation');
+  try {
+    await withUser(user.id, async c => {
+      await c.query(`select accept_invitation($1, $2)`, [user.id, hashToken(token)]);
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message.replace(/^error: /i, '') : 'The invitation could not be accepted.';
+    redirect(`/invite/${encodeURIComponent(token)}?error=${encodeURIComponent(message)}`);
+  }
+  revalidatePath('/organisation');
+  redirect('/organisation');
+}
+
+/** Changes someone's role. Admins manage members and admins; only owners change owners or make owners. */
+export async function changeMemberRole(formData: FormData) {
+  const user = await requireUser();
+  const orgId = String(formData.get('orgId') ?? '');
+  const userId = String(formData.get('userId') ?? '');
+  const role = String(formData.get('role') ?? '') as OrgRole;
+  if (!isUuid(orgId) || !userId || !ROLES.includes(role)) return;
+  await withUser(user.id, async c => {
+    const mine = await orgRoleOf(c, orgId, user.id);
+    const theirs = await orgRoleOf(c, orgId, userId);
+    if (!mine || mine === 'member' || !theirs) return;
+    if ((theirs === 'owner' || role === 'owner') && mine !== 'owner') return;
+    await c.query(`update organisation_members set role = $3 where organisation_id = $1 and user_id = $2`, [orgId, userId, role]);
+    await c.query(
+      `update workspace_members set role = $3
+        where user_id = $2 and workspace_id = (select id from workspaces where organisation_id = $1 and kind = 'organisation')`,
+      [orgId, userId, role === 'owner' ? 'owner' : 'editor']);
+  });
+  revalidatePath('/organisation');
+}
+
+/** Removes someone from the organisation. Admins cannot remove owners or themselves. */
+export async function removeMember(formData: FormData) {
+  const user = await requireUser();
+  const orgId = String(formData.get('orgId') ?? '');
+  const userId = String(formData.get('userId') ?? '');
+  if (!isUuid(orgId) || !userId || userId === user.id) return;
+  await withUser(user.id, async c => {
+    const mine = await orgRoleOf(c, orgId, user.id);
+    const theirs = await orgRoleOf(c, orgId, userId);
+    if (!mine || mine === 'member' || !theirs) return;
+    if (theirs === 'owner' && mine !== 'owner') return;
+    await c.query(`delete from organisation_members where organisation_id = $1 and user_id = $2`, [orgId, userId]);
+    await c.query(
+      `delete from workspace_members where user_id = $2 and workspace_id = (select id from workspaces where organisation_id = $1 and kind = 'organisation')`,
+      [orgId, userId]);
+  });
+  revalidatePath('/organisation');
+}
