@@ -1,28 +1,35 @@
+import { PremiumGate } from '@/components/PremiumGate';
 import Link from 'next/link';
 import { addClient, addMeeting, addMeetingAction, addProject, addTimeEntry, actionToTask, createInvoice, deleteClient, deleteMeeting, deleteMeetingAction, deleteProject, deleteTimeEntry, startTimer, stopTimer, toggleMeetingAction, updateMeeting } from '@/app/actions';
 import { Elapsed } from '@/components/work/Elapsed';
 import { withUser } from '@/lib/db';
-import { personalWorkspaceId } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
 import { getSettings, money } from '@/lib/settings';
+import { activeWorkspaceId, weekStartOf } from '@/lib/workspace';
+import { decideTimesheet, setActiveWorkspace, submitTimesheet } from '@/app/actions';
 import { entriesForReport } from '@/lib/work-queries';
 import { hmText, reportLines } from '@/lib/work';
 import { dateKeyIn, fmtMinutes, isDateKey, isUuid, shiftDateKey } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
-type Tab = 'time' | 'projects' | 'meetings' | 'reports';
+type Tab = 'time' | 'projects' | 'meetings' | 'reports' | 'approvals';
 const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export default async function WorkPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await getCurrentUser();
   const sp = await searchParams;
-  const tab: Tab = (['projects', 'meetings', 'reports'] as string[]).includes(sp.tab ?? '') ? (sp.tab as Tab) : 'time';
+  const tab: Tab = (['projects', 'meetings', 'reports', 'approvals'] as string[]).includes(sp.tab ?? '') ? (sp.tab as Tab) : 'time';
 
   const data = await withUser(user!.id, async c => {
-    const ws = await personalWorkspaceId(c, user!.id);
+    const ws = await activeWorkspaceId(c, user!.id);
     const settings = await getSettings(c, user!.id);
     const today = dateKeyIn(settings.timezone);
+    const wsList = (await c.query<{ id: string; name: string; kind: string }>(
+      `select w.id, w.name, w.kind from workspaces w join workspace_members m on m.workspace_id = w.id
+        where m.user_id = $1 order by w.kind, w.name`, [user!.id])).rows;
+    const activeKind = wsList.find(w => w.id === ws)?.kind ?? 'personal';
+    const isAdmin = (await c.query<{ a: boolean }>(`select is_workspace_admin($1) as a`, [ws])).rows[0].a;
     const timer = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string } | null }>(
       `select work_timer from user_settings where user_id = $1`, [user!.id])).rows[0]?.work_timer ?? null;
     const clients = (await c.query<{ id: string; name: string }>(`select id, name from clients where workspace_id = $1 and deleted_at is null order by name`, [ws])).rows;
@@ -61,7 +68,16 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
       `select id, number, client_name, period_start::text as period_start, period_end::text as period_end, total_minor, currency
          from invoices where workspace_id = $1 order by created_at desc limit 50`, [ws])).rows;
 
-    return { settings, today, timer, clients, projects, weekDays, monday, sunday, entries, meetings, meeting, actions, from, to, clientFilter, lines, invoices };
+    const timesheet = (await c.query<{ status: string; decision_note: string }>(
+      `select status, decision_note from timesheets where workspace_id = $1 and user_id = $2 and week_start = $3`, [ws, user!.id, monday])).rows[0] ?? null;
+    const approvals = isAdmin && activeKind === 'organisation' ? (await c.query<{ id: string; name: string; email: string; week_start: string; submitted_at: Date; minutes: number }>(
+      `select t.id, u.name, u.email, t.week_start::text as week_start, t.submitted_at,
+              (select coalesce(sum(e.end_min - e.start_min), 0)::int from time_entries e
+                where e.workspace_id = t.workspace_id and e.user_id = t.user_id and e.deleted_at is null
+                  and e.spent_on >= t.week_start and e.spent_on < t.week_start + 7) as minutes
+         from timesheets t join "user" u on u.id = t.user_id
+        where t.workspace_id = $1 and t.status = 'submitted' order by t.submitted_at`, [ws])).rows : [];
+    return { settings, today, timer, clients, projects, weekDays, monday, sunday, entries, meetings, meeting, actions, from, to, clientFilter, lines, invoices, wsList, ws, activeKind, isAdmin, timesheet, approvals };
   });
 
   const cur = data.settings.currency;
@@ -75,8 +91,16 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
     <>
       <div className="page-head">
         <div><h1>Work</h1><p>Time, projects, meetings and invoices</p></div>
-        <div className="seg">{tabLink('time', 'Time')}{tabLink('projects', 'Projects')}{tabLink('meetings', 'Meetings')}{tabLink('reports', 'Reports')}</div>
+        <div className="seg">{tabLink('time', 'Time')}{tabLink('projects', 'Projects')}{tabLink('meetings', 'Meetings')}{tabLink('reports', 'Reports')}{data.isAdmin && data.activeKind === 'organisation' ? tabLink('approvals', 'Approvals') : null}</div>
       </div>
+
+      <form action={setActiveWorkspace} className="actions" style={{ marginBottom: 16 }}>
+        <span className="small muted">Working in</span>
+        <select className="select" name="ws" defaultValue={data.ws} style={{ width: 240 }} aria-label="Workspace">
+          {data.wsList.map(w => <option key={w.id} value={w.id}>{w.name}{w.kind === 'organisation' ? ' (team)' : ' (personal)'}</option>)}
+        </select>
+        <button className="btn sm" type="submit">Switch</button>
+      </form>
 
       {tab === 'time' ? (
         <>
@@ -105,6 +129,25 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
             <strong>{data.weekDays[0]} to {data.weekDays[6]}</strong>
             <Link className="btn" href={`/work?tab=time&week=${Math.min(0, (Number(sp.week ?? 0) || 0) + 1)}`}>Next week ›</Link>
           </div>
+          {data.activeKind === 'organisation' ? (
+            <section className="card card-body" style={{ marginBottom: 16 }}>
+              <div className="actions" style={{ justifyContent: 'space-between' }}>
+                <div>
+                  <strong>Timesheet for {data.monday}</strong>
+                  <div className="small muted">{data.timesheet
+                    ? data.timesheet.status === 'submitted' ? 'Submitted, waiting for approval'
+                    : data.timesheet.status === 'approved' ? 'Approved. This week is locked.'
+                    : `Rejected${data.timesheet.decision_note ? `: ${data.timesheet.decision_note}` : ''}. Fix and submit again.`
+                    : 'Not submitted yet'}</div>
+                </div>
+                {data.timesheet?.status !== 'approved' && data.timesheet?.status !== 'submitted' ? (
+                  <form action={submitTimesheet}><input type="hidden" name="weekStart" value={data.monday} />
+                    <button className="btn primary" type="submit">Submit week for approval</button></form>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
           <div className="stats" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
             <div className="card stat"><div className="label">Week total</div><div className="value num">{hmText(weekMinutes)}</div></div>
             <div className="card stat"><div className="label">Billable</div><div className="value num">{hmText(weekBillable)}</div></div>
@@ -144,6 +187,34 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
             </form>
           </details>
         </>
+      ) : null}
+
+      {tab === 'approvals' ? (
+        <section className="card flush">
+          <div className="card-head"><h2>Timesheets waiting for approval</h2><span className="muted small">{data.approvals.length} submitted</span></div>
+          {data.approvals.length === 0 ? <div className="empty">Nothing to approve right now.</div> : (
+            <table className="table">
+              <thead><tr><th>Employee</th><th>Week of</th><th className="num">Hours</th><th>Submitted</th><th className="action-col" aria-label="Actions" /></tr></thead>
+              <tbody>
+                {data.approvals.map(a => (
+                  <tr key={a.id}>
+                    <td><strong>{a.name || a.email}</strong><div className="small muted">{a.email}</div></td>
+                    <td>{a.week_start}</td>
+                    <td className="num">{hmText(a.minutes)}</td>
+                    <td className="small">{new Date(a.submitted_at).toLocaleDateString('en-IN')}</td>
+                    <td className="action-col">
+                      <div className="actions" style={{ justifyContent: 'flex-end' }}>
+                        <form action={decideTimesheet}><input type="hidden" name="id" value={a.id} /><input type="hidden" name="decision" value="approved" /><button className="btn primary sm" type="submit">Approve</button></form>
+                        <form action={decideTimesheet} className="actions"><input type="hidden" name="id" value={a.id} /><input type="hidden" name="decision" value="rejected" />
+                          <input className="input" name="note" placeholder="Reason" style={{ width: 140, height: 34 }} /><button className="btn ghost sm danger" type="submit">Reject</button></form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
       ) : null}
 
       {tab === 'projects' ? (
@@ -336,4 +407,8 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
       ) : null}
     </>
   );
+}
+
+export default async function WorkPage(props: Parameters<typeof WorkPageContent>[0]) {
+  return <PremiumGate feature="Work"><WorkPageContent {...props} /></PremiumGate>;
 }

@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
+import { FREE_FEATURES, PERIOD, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
 
 type Mode = 'login' | 'signup';
 
@@ -40,11 +41,42 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
           <span className="brand-mark" style={{ background: '#fff', color: 'var(--accent)' }} aria-hidden="true">🙂</span>
           My Buddy
         </div>
-        <div>
+
+        <div className="auth-hero">
           <h2>Plan your day, buddy.</h2>
-          <p style={{ marginTop: 14 }}>Routines, tasks, notes and focus time in one place, with the same data on every device you sign in on.</p>
+          <p>Routines, tasks, notes and focus time in one place, on every device you sign in on.</p>
         </div>
-        <p className="small">Your plans are private. Only you can see them.</p>
+
+        <div className="feature-block">
+          <div className="feature-title">Free</div>
+          <ul className="feature-list">
+            {FREE_FEATURES.map(f => (
+              <li key={f.title}><span aria-hidden="true">{f.icon}</span><div><strong>{f.title}</strong><span>{f.detail}</span></div></li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="feature-block">
+          <div className="feature-title">Premium</div>
+          <ul className="feature-list">
+            {PREMIUM_FEATURES.map(f => (
+              <li key={f.title}><span aria-hidden="true">{f.icon}</span><div><strong>{f.title}</strong><span>{f.detail}</span></div></li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="pricing">
+          <div className="price-card">
+            <div className="price-name">Free</div>
+            <div className="price-value">$0</div>
+            <div className="price-note">The daily planner, for everyone.</div>
+          </div>
+          <div className="price-card featured">
+            <div className="price-name">Premium</div>
+            <div className="price-value">{PRICE}<span> {PERIOD}</span></div>
+            <div className="price-note">Spending, student, work and teams.</div>
+          </div>
+        </div>
       </aside>
 
       <div className="auth-form">
@@ -54,7 +86,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
             <p className="muted" style={{ marginTop: 6 }}>{signup ? 'Your personal workspace is created for you.' : 'Welcome back.'}</p>
           </div>
 
-          <form onSubmit={submit} className="auth-card" style={{ gap: 14 }}>
+          <form onSubmit={submit} className="auth-stack">
             {signup ? (
               <label className="field">Name
                 <input className="input" value={name} onChange={e => setName(e.target.value)} required autoComplete="name" />

@@ -1,3 +1,4 @@
+import { PremiumGate } from '@/components/PremiumGate';
 import Link from 'next/link';
 import { addExpense, deleteExpense, setMonthlyBudget } from '@/app/actions';
 import { withUser } from '@/lib/db';
@@ -9,7 +10,7 @@ import { dateKeyIn, isDateKey, longDate, shiftDateKey } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SpendPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
+async function SpendPageContent({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const user = await getCurrentUser();
   const { day: requested } = await searchParams;
 
@@ -126,4 +127,8 @@ export default async function SpendPage({ searchParams }: { searchParams: Promis
       </div>
     </>
   );
+}
+
+export default async function SpendPage(props: Parameters<typeof SpendPageContent>[0]) {
+  return <PremiumGate feature="Spending"><SpendPageContent {...props} /></PremiumGate>;
 }

@@ -1,5 +1,4 @@
 import { withUser } from '@/lib/db';
-import { personalWorkspaceId } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
 import { invoicePdf, type ReportLine } from '@/lib/work';
 import { isUuid } from '@/lib/time';
@@ -14,12 +13,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!isUuid(id)) return new Response('Not found', { status: 404 });
 
   const invoice = await withUser(user.id, async c => {
-    const ws = await personalWorkspaceId(c, user.id);
     const { rows } = await c.query<{
       number: string; client_name: string; period_start: string; period_end: string; currency: string; total_minor: number; lines: ReportLine[]; created_at: Date;
     }>(
       `select number, client_name, period_start::text as period_start, period_end::text as period_end, currency, total_minor, lines, created_at
-         from invoices where id = $1 and workspace_id = $2`, [id, ws]);
+         from invoices where id = $1`, [id]);
     return rows[0] ?? null;
   });
   if (!invoice) return new Response('Not found', { status: 404 });

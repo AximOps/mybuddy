@@ -1,3 +1,4 @@
+import { PremiumGate } from '@/components/PremiumGate';
 import { changeMemberRole, createOrganisation, inviteMember, removeMember, revokeInvite } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { getCurrentUser } from '@/lib/session';
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Employee' };
 
-export default async function OrganisationPage({ searchParams }: { searchParams: Promise<{ invited?: string }> }) {
+async function OrganisationPageContent({ searchParams }: { searchParams: Promise<{ invited?: string }> }) {
   const user = await getCurrentUser();
   const { invited } = await searchParams;
 
@@ -135,4 +136,8 @@ export default async function OrganisationPage({ searchParams }: { searchParams:
       </div>
     </>
   );
+}
+
+export default async function OrganisationPage(props: Parameters<typeof OrganisationPageContent>[0]) {
+  return <PremiumGate feature="Teams"><OrganisationPageContent {...props} /></PremiumGate>;
 }

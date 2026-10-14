@@ -8,6 +8,7 @@ import { personalWorkspaceId } from '@/lib/planner';
 import { resolveTag } from '@/lib/tags';
 import { reportLines } from '@/lib/work';
 import { getSettings } from '@/lib/settings';
+import { activeWorkspaceId, weekStartOf, WORKSPACE_COOKIE } from '@/lib/workspace';
 import { parseMoney, zonedToUtc } from '@/lib/time';
 import { cookies } from 'next/headers';
 import { getCurrentUser } from '@/lib/session';
@@ -694,7 +695,7 @@ export async function addClient(formData: FormData) {
   const name = text(formData.get('name'), 80);
   if (!name) return;
   await withUser(user.id, async c => {
-    const ws = await personalWorkspaceId(c, user.id);
+    const ws = await activeWorkspaceId(c, user.id);
     await c.query(`insert into clients (id, workspace_id, name) values ($1, $2, $3)`, [randomUUID(), ws, name]);
   });
   revalidatePath('/work');
@@ -716,7 +717,7 @@ export async function addProject(formData: FormData) {
   const rate = rateRaw === '' ? 0 : parseMoney(rateRaw);
   if (!name || rate === null) return;
   await withUser(user.id, async c => {
-    const ws = await personalWorkspaceId(c, user.id);
+    const ws = await activeWorkspaceId(c, user.id);
     await c.query(`insert into projects (id, workspace_id, client_id, name, hourly_rate_minor) values ($1, $2, $3, $4, $5)`,
       [randomUUID(), ws, clientId, name, rate]);
   });
@@ -754,7 +755,7 @@ export async function stopTimer() {
       `select work_timer from user_settings where user_id = $1`, [user.id])).rows[0];
     const t = row?.work_timer;
     if (!t) return;
-    const ws = await personalWorkspaceId(c, user.id);
+    const ws = await activeWorkspaceId(c, user.id);
     const startMs = Date.parse(t.startedAt);
     const endMs = Date.now();
     const local = (ms: number) => {
@@ -785,7 +786,8 @@ export async function addTimeEntry(formData: FormData) {
   const billable = formData.get('billable') === 'on';
   if (!isUuid(projectId) || !isDateKey(day) || start === null || end === null || end <= start) return;
   await withUser(user.id, async c => {
-    const ws = await personalWorkspaceId(c, user.id);
+    const ws = await activeWorkspaceId(c, user.id);
+    if (await weekIsApproved(c, ws, user.id, day)) return;
     await c.query(
       `insert into time_entries (id, workspace_id, user_id, project_id, spent_on, start_min, end_min, billable, note)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
@@ -799,7 +801,11 @@ export async function deleteTimeEntry(formData: FormData) {
   const user = await requireUser();
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
-  await withUser(user.id, async c => { await c.query(`update time_entries set deleted_at = now() where id = $1`, [id]); });
+  await withUser(user.id, async c => {
+    const row = (await c.query<{ spent_on: string; workspace_id: string }>(`select spent_on::text as spent_on, workspace_id from time_entries where id = $1 and user_id = $2`, [id, user.id])).rows[0];
+    if (!row || await weekIsApproved(c, row.workspace_id, user.id, row.spent_on)) return;
+    await c.query(`update time_entries set deleted_at = now() where id = $1`, [id]);
+  });
   revalidatePath('/work');
 }
 
@@ -812,7 +818,7 @@ export async function addMeeting(formData: FormData) {
   if (!title || !isDateKey(meetingOn) || (end !== null && start !== null && end <= start)) return;
   const id = randomUUID();
   await withUser(user.id, async c => {
-    const ws = await personalWorkspaceId(c, user.id);
+    const ws = await activeWorkspaceId(c, user.id);
     await c.query(
       `insert into meetings (id, workspace_id, title, meeting_on, start_min, end_min, attendees, agenda, notes)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
@@ -875,7 +881,7 @@ export async function actionToTask(formData: FormData) {
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
-    const ws = await personalWorkspaceId(c, user.id);
+    const ws = await activeWorkspaceId(c, user.id);
     await c.query(
       `insert into tasks (id, workspace_id, title, tag, created_by)
        select gen_random_uuid(), $2, a.text, 'Work', $3 from meeting_actions a where a.id = $1`,
@@ -901,7 +907,7 @@ export async function createInvoice(formData: FormData) {
   const to = String(formData.get('to') ?? '');
   if (!isUuid(clientId) || !isDateKey(from) || !isDateKey(to) || to < from) return;
   await withUser(user.id, async c => {
-    const ws = await personalWorkspaceId(c, user.id);
+    const ws = await activeWorkspaceId(c, user.id);
     const settings = await getSettings(c, user.id);
     const client = (await c.query<{ name: string }>(`select name from clients where id = $1 and workspace_id = $2`, [clientId, ws])).rows[0];
     if (!client) return;
@@ -1032,4 +1038,57 @@ export async function removeMember(formData: FormData) {
       [orgId, userId]);
   });
   revalidatePath('/organisation');
+}
+
+async function weekIsApproved(c: import('pg').PoolClient, ws: string, userId: string, day: string) {
+  const { rows } = await c.query(
+    `select 1 from timesheets where workspace_id = $1 and user_id = $2 and week_start = $3 and status = 'approved'`,
+    [ws, userId, weekStartOf(day)]);
+  return rows.length > 0;
+}
+
+/* ---------- Workspace choice and timesheets ---------- */
+
+export async function setActiveWorkspace(formData: FormData) {
+  const user = await requireUser();
+  const ws = String(formData.get('ws') ?? '');
+  if (!isUuid(ws)) return;
+  const allowed = await withUser(user.id, async c => {
+    const { rows } = await c.query(`select 1 from workspace_members where workspace_id = $1 and user_id = $2`, [ws, user.id]);
+    return rows.length > 0;
+  });
+  if (allowed) (await cookies()).set(WORKSPACE_COOKIE, ws, { path: '/', maxAge: 60 * 60 * 24 * 365, sameSite: 'lax' });
+  revalidatePath('/work');
+}
+
+/** Sends a week for approval. Only organisation workspaces have approvals. */
+export async function submitTimesheet(formData: FormData) {
+  const user = await requireUser();
+  const weekStart = String(formData.get('weekStart') ?? '');
+  if (!isDateKey(weekStart)) return;
+  await withUser(user.id, async c => {
+    const ws = await activeWorkspaceId(c, user.id);
+    const kind = (await c.query<{ kind: string }>(`select kind from workspaces where id = $1`, [ws])).rows[0]?.kind;
+    if (kind !== 'organisation') return;
+    await c.query(
+      `insert into timesheets (workspace_id, user_id, week_start, status, submitted_at) values ($1, $2, $3, 'submitted', now())
+       on conflict (workspace_id, user_id, week_start) do update set status = 'submitted', submitted_at = now(), decision_note = ''`,
+      [ws, user.id, weekStart]);
+  });
+  revalidatePath('/work');
+}
+
+/** Approve or reject a submitted week. Only owners and admins of the organisation can do this. */
+export async function decideTimesheet(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  const decision = String(formData.get('decision') ?? '');
+  const note = text(formData.get('note'), 300);
+  if (!isUuid(id) || !['approved', 'rejected'].includes(decision)) return;
+  await withUser(user.id, async c => {
+    await c.query(
+      `update timesheets set status = $2, decided_by = $3, decided_at = now(), decision_note = $4 where id = $1 and status = 'submitted'`,
+      [id, decision, user.id, note]);
+  });
+  revalidatePath('/work');
 }

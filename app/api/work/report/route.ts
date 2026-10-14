@@ -1,5 +1,5 @@
 import { withUser } from '@/lib/db';
-import { personalWorkspaceId } from '@/lib/planner';
+import { activeWorkspaceId } from '@/lib/workspace';
 import { getCurrentUser } from '@/lib/session';
 import { getSettings } from '@/lib/settings';
 import { entriesForReport } from '@/lib/work-queries';
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const clientId = isUuid(clientParam) ? clientParam : null;
 
   const result = await withUser(user.id, async c => {
-    const ws = await personalWorkspaceId(c, user.id);
+    const ws = await activeWorkspaceId(c, user.id);
     const settings = await getSettings(c, user.id);
     const lines = reportLines(await entriesForReport(c, ws, from, to, clientId));
     return { lines, currency: settings.currency };

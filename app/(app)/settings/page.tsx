@@ -1,6 +1,7 @@
 import { deleteCustomTag, resetAllData, resetTodayProgress, updateAppearance, updateMode, updateProfile, updateSettings, updateStudentTools } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { CURRENCIES, getSettings } from '@/lib/settings';
+import { FREE_FEATURES, PERIOD, PREMIUM_ENABLED, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
 import { customTags } from '@/lib/tags';
 import { getCurrentUser } from '@/lib/session';
 import { dateKeyIn } from '@/lib/time';
@@ -56,6 +57,17 @@ export default async function SettingsPage() {
             <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Save profile</button></div>
           </form>
         ))}
+
+        <section className="card flush" id="plan">
+          <div className="card-head"><h2>Plan</h2><span className="badge accent">{settings.plan === 'premium' ? 'Premium' : 'Free'}</span></div>
+          <div className="card-body stack" style={{ gap: 14 }}>
+            <p className="small muted">{PREMIUM_ENABLED ? `Premium is ${PRICE} ${PERIOD}.` : 'Every feature is free while we test. Premium will be ' + PRICE + ' ' + PERIOD + ' once payments are connected.'}</p>
+            <div className="actions" style={{ justifyContent: 'space-between' }}>
+              <div className="small muted">Included: {[...FREE_FEATURES, ...PREMIUM_FEATURES].map(f => f.title).join(', ')}</div>
+              <button type="button" className="btn primary" disabled>{settings.plan === 'premium' ? 'Premium active' : 'Upgrade (payments not connected yet)'}</button>
+            </div>
+          </div>
+        </section>
 
         {section('Appearance', (
           <form action={updateAppearance} className="card-body actions">

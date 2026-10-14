@@ -1,3 +1,4 @@
+import { PremiumGate } from '@/components/PremiumGate';
 import Link from 'next/link';
 import { addClass, addDeadline, addSubject, deleteClass, deleteDeadline, toggleDeadline } from '@/app/actions';
 import { withUser } from '@/lib/db';
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 type Tab = 'timetable' | 'deadlines' | 'subjects';
 
-export default async function StudentPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+async function StudentPageContent({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await getCurrentUser();
   const { tab: requested } = await searchParams;
   const tab: Tab = requested === 'deadlines' || requested === 'subjects' ? requested : 'timetable';
@@ -198,4 +199,8 @@ export default async function StudentPage({ searchParams }: { searchParams: Prom
       ) : null}
     </>
   );
+}
+
+export default async function StudentPage(props: Parameters<typeof StudentPageContent>[0]) {
+  return <PremiumGate feature="Student planner"><StudentPageContent {...props} /></PremiumGate>;
 }
