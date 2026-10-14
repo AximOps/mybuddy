@@ -83,7 +83,7 @@ export default async function SettingsPage() {
           <form action={updateMode} className="card-body actions">
             <button type="submit" name="mode" value="personal" className={`btn ${settings.mode === 'personal' ? 'primary' : ''}`}>Personal</button>
             <button type="submit" name="mode" value="student" className={`btn ${settings.mode === 'student' ? 'primary' : ''}`}>Student</button>
-            <button type="button" className="btn" disabled>Work (coming soon)</button>
+            <button type="submit" name="mode" value="work" className={`btn ${settings.mode === 'work' ? 'primary' : ''}`}>Work</button>
           </form>
         ))}
 

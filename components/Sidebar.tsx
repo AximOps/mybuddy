@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, CalendarDays, GraduationCap, ListChecks, NotebookPen, Repeat, Settings, Timer, Wallet } from 'lucide-react';
+import { BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Repeat, Settings, Timer, Wallet } from 'lucide-react';
 import { LogoutButton } from './LogoutButton';
 
 const ITEMS = [
@@ -17,11 +17,10 @@ const ITEMS = [
 ];
 
 /** Side navigation on desktop, and a bottom bar with the same links on phones. */
-export function Sidebar({ name, email, showStudent }: { name: string; email: string; showStudent: boolean }) {
+export function Sidebar({ name, email, showStudent, showWork }: { name: string; email: string; showStudent: boolean; showWork: boolean }) {
   const pathname = usePathname();
-  const items = showStudent
-    ? [...ITEMS.slice(0, 3), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(3)]
-    : ITEMS;
+  const withStudent = showStudent ? [...ITEMS.slice(0, 3), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(3)] : ITEMS;
+  const items = showWork ? [...withStudent.slice(0, withStudent.findIndex(i => i.href === '/spend') + 1), { href: '/work', label: 'Work', icon: Briefcase }, ...withStudent.slice(withStudent.findIndex(i => i.href === '/spend') + 1)] : withStudent;
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   return (
     <>

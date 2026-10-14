@@ -6,6 +6,8 @@ import { redirect } from 'next/navigation';
 import { withUser } from '@/lib/db';
 import { personalWorkspaceId } from '@/lib/planner';
 import { resolveTag } from '@/lib/tags';
+import { reportLines } from '@/lib/work';
+import { getSettings } from '@/lib/settings';
 import { parseMoney, zonedToUtc } from '@/lib/time';
 import { cookies } from 'next/headers';
 import { getCurrentUser } from '@/lib/session';
@@ -451,7 +453,7 @@ export async function updateAppearance(formData: FormData) {
 export async function updateMode(formData: FormData) {
   const user = await requireUser();
   const mode = String(formData.get('mode') ?? '');
-  if (!['student', 'personal'].includes(mode)) return; // work arrives in a later phase
+  if (!['student', 'personal', 'work'].includes(mode)) return;
   await withUser(user.id, async c => {
     await c.query(
       `insert into user_settings (user_id, mode, student_enabled) values ($1, $2, $3)
@@ -683,4 +685,240 @@ export async function deleteDeadline(formData: FormData) {
   });
   revalidatePath('/student');
   revalidatePath('/today');
+}
+
+/* ---------- Work: clients, projects, timesheet, meetings, invoices ---------- */
+
+export async function addClient(formData: FormData) {
+  const user = await requireUser();
+  const name = text(formData.get('name'), 80);
+  if (!name) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(`insert into clients (id, workspace_id, name) values ($1, $2, $3)`, [randomUUID(), ws, name]);
+  });
+  revalidatePath('/work');
+}
+
+export async function deleteClient(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => { await c.query(`update clients set deleted_at = now() where id = $1`, [id]); });
+  revalidatePath('/work');
+}
+
+export async function addProject(formData: FormData) {
+  const user = await requireUser();
+  const name = text(formData.get('name'), 80);
+  const clientId = optionalUuid(formData.get('clientId'));
+  const rateRaw = String(formData.get('rate') ?? '').trim();
+  const rate = rateRaw === '' ? 0 : parseMoney(rateRaw);
+  if (!name || rate === null) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(`insert into projects (id, workspace_id, client_id, name, hourly_rate_minor) values ($1, $2, $3, $4, $5)`,
+      [randomUUID(), ws, clientId, name, rate]);
+  });
+  revalidatePath('/work');
+}
+
+export async function deleteProject(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => { await c.query(`update projects set deleted_at = now() where id = $1`, [id]); });
+  revalidatePath('/work');
+}
+
+export async function startTimer(formData: FormData) {
+  const user = await requireUser();
+  const projectId = String(formData.get('projectId') ?? '');
+  const note = text(formData.get('note'), 160);
+  if (!isUuid(projectId)) return;
+  await withUser(user.id, async c => {
+    await c.query(
+      `insert into user_settings (user_id, work_timer) values ($1, $2)
+       on conflict (user_id) do update set work_timer = excluded.work_timer, updated_at = now()`,
+      [user.id, JSON.stringify({ projectId, note, startedAt: new Date().toISOString() })]);
+  });
+  revalidatePath('/work');
+}
+
+/** Stops the running timer and saves it as a time entry on the day it started (in the person's time zone). */
+export async function stopTimer() {
+  const user = await requireUser();
+  await withUser(user.id, async c => {
+    const settings = await getSettings(c, user.id);
+    const row = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string } | null }>(
+      `select work_timer from user_settings where user_id = $1`, [user.id])).rows[0];
+    const t = row?.work_timer;
+    if (!t) return;
+    const ws = await personalWorkspaceId(c, user.id);
+    const startMs = Date.parse(t.startedAt);
+    const endMs = Date.now();
+    const local = (ms: number) => {
+      const p = new Intl.DateTimeFormat('en-CA', { timeZone: settings.timezone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms));
+      const g = (k: string) => Number(p.find(x => x.type === k)?.value);
+      return { day: `${g('year')}-${String(g('month')).padStart(2, '0')}-${String(g('day')).padStart(2, '0')}`, min: g('hour') * 60 + g('minute') };
+    };
+    const s = local(startMs);
+    const startMin = s.min;
+    const minutes = Math.max(1, Math.min(1440 - startMin, Math.round((endMs - startMs) / 60000)));
+    await c.query(
+      `insert into time_entries (id, workspace_id, user_id, project_id, spent_on, start_min, end_min, billable, note)
+       values ($1, $2, $3, $4, $5, $6, $7, true, $8)`,
+      [randomUUID(), ws, user.id, t.projectId, s.day, startMin, startMin + minutes, t.note]);
+    await c.query(`update user_settings set work_timer = null, updated_at = now() where user_id = $1`, [user.id]);
+  });
+  revalidatePath('/work');
+  revalidatePath('/stats');
+}
+
+export async function addTimeEntry(formData: FormData) {
+  const user = await requireUser();
+  const projectId = String(formData.get('projectId') ?? '');
+  const day = String(formData.get('day') ?? '');
+  const start = parseHM(formData.get('start'));
+  const end = parseHM(formData.get('end'));
+  const note = text(formData.get('note'), 160);
+  const billable = formData.get('billable') === 'on';
+  if (!isUuid(projectId) || !isDateKey(day) || start === null || end === null || end <= start) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(
+      `insert into time_entries (id, workspace_id, user_id, project_id, spent_on, start_min, end_min, billable, note)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [randomUUID(), ws, user.id, projectId, day, start, end, billable, note]);
+  });
+  revalidatePath('/work');
+  revalidatePath('/stats');
+}
+
+export async function deleteTimeEntry(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => { await c.query(`update time_entries set deleted_at = now() where id = $1`, [id]); });
+  revalidatePath('/work');
+}
+
+export async function addMeeting(formData: FormData) {
+  const user = await requireUser();
+  const title = text(formData.get('title'), 120);
+  const meetingOn = String(formData.get('meetingOn') ?? '');
+  const start = formData.get('start') ? parseHM(formData.get('start')) : null;
+  const end = formData.get('end') ? parseHM(formData.get('end')) : null;
+  if (!title || !isDateKey(meetingOn) || (end !== null && start !== null && end <= start)) return;
+  const id = randomUUID();
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(
+      `insert into meetings (id, workspace_id, title, meeting_on, start_min, end_min, attendees, agenda, notes)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [id, ws, title, meetingOn, start, end, text(formData.get('attendees'), 300), String(formData.get('agenda') ?? '').slice(0, 5000), String(formData.get('notes') ?? '').slice(0, 20000)]);
+  });
+  revalidatePath('/work');
+  redirect(`/work?tab=meetings&meeting=${id}`);
+}
+
+export async function updateMeeting(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  const title = text(formData.get('title'), 120);
+  const meetingOn = String(formData.get('meetingOn') ?? '');
+  const start = formData.get('start') ? parseHM(formData.get('start')) : null;
+  const end = formData.get('end') ? parseHM(formData.get('end')) : null;
+  if (!isUuid(id) || !title || !isDateKey(meetingOn)) return;
+  await withUser(user.id, async c => {
+    await c.query(
+      `update meetings set title = $2, meeting_on = $3, start_min = $4, end_min = $5, attendees = $6, agenda = $7, notes = $8, updated_at = now() where id = $1`,
+      [id, title, meetingOn, start, end, text(formData.get('attendees'), 300), String(formData.get('agenda') ?? '').slice(0, 5000), String(formData.get('notes') ?? '').slice(0, 20000)]);
+  });
+  revalidatePath('/work');
+}
+
+export async function deleteMeeting(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => { await c.query(`update meetings set deleted_at = now() where id = $1`, [id]); });
+  revalidatePath('/work');
+  redirect('/work?tab=meetings');
+}
+
+export async function addMeetingAction(formData: FormData) {
+  const user = await requireUser();
+  const meetingId = String(formData.get('meetingId') ?? '');
+  const t = text(formData.get('text'), 200);
+  if (!isUuid(meetingId) || !t) return;
+  await withUser(user.id, async c => {
+    await c.query(
+      `insert into meeting_actions (id, meeting_id, text, sort_order)
+       values ($1, $2, $3, (select coalesce(max(sort_order), -1) + 1 from meeting_actions where meeting_id = $2))`,
+      [randomUUID(), meetingId, t]);
+  });
+  revalidatePath('/work');
+}
+
+export async function toggleMeetingAction(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => { await c.query(`update meeting_actions set done = not done where id = $1`, [id]); });
+  revalidatePath('/work');
+}
+
+/** Copies an action item into the To-Do list, tagged Work. */
+export async function actionToTask(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(
+      `insert into tasks (id, workspace_id, title, tag, created_by)
+       select gen_random_uuid(), $2, a.text, 'Work', $3 from meeting_actions a where a.id = $1`,
+      [id, ws, user.id]);
+  });
+  revalidatePath('/tasks');
+  revalidatePath('/today');
+}
+
+export async function deleteMeetingAction(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => { await c.query(`delete from meeting_actions where id = $1`, [id]); });
+  revalidatePath('/work');
+}
+
+/** Creates an invoice for one client and period. The lines are saved with it, so later edits don't change it. */
+export async function createInvoice(formData: FormData) {
+  const user = await requireUser();
+  const clientId = String(formData.get('clientId') ?? '');
+  const from = String(formData.get('from') ?? '');
+  const to = String(formData.get('to') ?? '');
+  if (!isUuid(clientId) || !isDateKey(from) || !isDateKey(to) || to < from) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    const settings = await getSettings(c, user.id);
+    const client = (await c.query<{ name: string }>(`select name from clients where id = $1 and workspace_id = $2`, [clientId, ws])).rows[0];
+    if (!client) return;
+    const entries = await c.query<{ project_id: string; project_name: string; client_name: string | null; hourly_rate_minor: number; start_min: number; end_min: number; billable: boolean }>(
+      `select e.project_id, p.name as project_name, cl.name as client_name, p.hourly_rate_minor, e.start_min, e.end_min, e.billable
+         from time_entries e join projects p on p.id = e.project_id left join clients cl on cl.id = p.client_id
+        where e.workspace_id = $1 and p.client_id = $2 and e.billable and e.deleted_at is null
+          and e.spent_on >= $3 and e.spent_on <= $4`, [ws, clientId, from, to]);
+    const lines = reportLines(entries.rows);
+    const total = lines.reduce((s, l) => s + l.amountMinor, 0);
+    const year = new Date().getFullYear();
+    const count = await c.query<{ n: number }>(`select count(*)::int as n from invoices where workspace_id = $1 and number like $2`, [ws, `INV-${year}-%`]);
+    const number = `INV-${year}-${String(count.rows[0].n + 1).padStart(3, '0')}`;
+    await c.query(
+      `insert into invoices (id, workspace_id, number, client_id, client_name, period_start, period_end, currency, total_minor, lines)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [randomUUID(), ws, number, clientId, client.name, from, to, settings.currency, total, JSON.stringify(lines)]);
+  });
+  revalidatePath('/work');
 }

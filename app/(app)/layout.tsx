@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: APP_TZ });
   return (
     <div className="app">
-      <Sidebar name={user.name} email={user.email} showStudent={settings.studentEnabled} />
+      <Sidebar name={user.name} email={user.email} showStudent={settings.studentEnabled} showWork={settings.mode === 'work'} />
       <div className="main">
         <header className="topbar">
           <span className="mobile-brand"><span className="brand-mark" aria-hidden="true">🙂</span> My Buddy</span>

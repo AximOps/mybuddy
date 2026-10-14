@@ -11,9 +11,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const theme = saved === 'light' || saved === 'dark' ? saved : undefined;
   return (
     <html lang="en" data-theme={theme}>
-	<head>
-        <title>Next.js</title>
-      </head>
       <body>
 	  {children}
 	  <SpeedInsights />
