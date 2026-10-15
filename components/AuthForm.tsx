@@ -51,39 +51,41 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
           <p>Routines, tasks, notes and focus time in one place, on every device you sign in on.</p>
         </div>
 
+        <div className="pricing">
+          <div className="price-card featured">
+            <div className="price-flag">15-day free trial</div>
+            <div className="price-name">Premium</div>
+            <div className="price-value">{PRICE}<span> {PERIOD}</span></div>
+            <p className="price-lead">Everything on My Buddy: spending, student planner, work, invoices and teams.</p>
+            <ul className="check-list">
+              {PREMIUM_FEATURES.map(f => <li key={f.title}>{f.title}</li>)}
+            </ul>
+            <Link href="/signup" className="btn price-cta">Start your 15-day free trial <span aria-hidden="true">→</span></Link>
+          </div>
+          <div className="price-card">
+            <div className="price-name">Free</div>
+            <div className="price-value">$0</div>
+            <ul className="check-list">
+              <li>Daily routines and To-Do</li><li>Notes and focus timer</li><li>Stats and data download</li>
+            </ul>
+          </div>
+        </div>
+
         <div className="tiles">
-          <div className="tile-group-label">Free</div>
-          {FREE_FEATURES.map(f => (
-            <div key={f.title} className="tile">
-              <span className="tile-icon" aria-hidden="true">{f.icon}</span>
-              <div><strong>{f.title}</strong><span>{f.detail}</span></div>
-            </div>
-          ))}
-          <div className="tile-group-label">Premium</div>
+          <div className="tile-group-label">Premium features</div>
           {PREMIUM_FEATURES.map(f => (
             <div key={f.title} className="tile premium">
               <span className="tile-icon" aria-hidden="true">{f.icon}</span>
               <div><strong>{f.title}</strong><span>{f.detail}</span></div>
             </div>
           ))}
-        </div>
-
-        <div className="pricing">
-          <div className="price-card">
-            <div className="price-name">Free</div>
-            <div className="price-value">$0</div>
-            <ul className="check-list">
-              <li>Daily routines and To-Do</li><li>Notes and focus timer</li><li>Stats and backups</li>
-            </ul>
-          </div>
-          <div className="price-card featured">
-            <div className="price-flag">15-day free trial</div>
-            <div className="price-name">Premium</div>
-            <div className="price-value">{PRICE}<span> {PERIOD}</span></div>
-            <ul className="check-list">
-              <li>Spending and budgets</li><li>Student planner and GPA</li><li>Work, invoices and teams</li>
-            </ul>
-          </div>
+          <div className="tile-group-label">Free features</div>
+          {FREE_FEATURES.map(f => (
+            <div key={f.title} className="tile">
+              <span className="tile-icon" aria-hidden="true">{f.icon}</span>
+              <div><strong>{f.title}</strong><span>{f.detail}</span></div>
+            </div>
+          ))}
         </div>
       </aside>
 
