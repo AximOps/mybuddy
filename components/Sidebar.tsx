@@ -2,25 +2,23 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Repeat, Settings, Timer, Users, Wallet } from 'lucide-react';
-import { LogoutButton } from './LogoutButton';
+import { BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
+import { BuddyLogo } from './BuddyLogo';
 
 const ITEMS = [
   { href: '/today', label: 'Today', icon: CalendarDays },
   { href: '/focus', label: 'Focus', icon: Timer },
   { href: '/tasks', label: 'To-Do', icon: ListChecks },
   { href: '/notes', label: 'Notes', icon: NotebookPen },
-  { href: '/routines', label: 'Routines', icon: Repeat },
   { href: '/spend', label: 'Spending', icon: Wallet },
-  { href: '/stats', label: 'Stats', icon: BarChart3 },
   { href: '/organisation', label: 'Team', icon: Users },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/stats', label: 'Stats', icon: BarChart3 },
 ];
 
 /** Side navigation on desktop, and a bottom bar with the same links on phones. */
-export function Sidebar({ name, email, showStudent, showWork }: { name: string; email: string; showStudent: boolean; showWork: boolean }) {
+export function Sidebar({ showStudent, showWork }: { name?: string; email?: string; showStudent: boolean; showWork: boolean }) {
   const pathname = usePathname();
-  const withStudent = showStudent ? [...ITEMS.slice(0, 3), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(3)] : ITEMS;
+  const withStudent = showStudent ? [...ITEMS.slice(0, 4), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(4)] : ITEMS;
   const items = showWork ? [...withStudent.slice(0, withStudent.findIndex(i => i.href === '/spend') + 1), { href: '/work', label: 'Work', icon: Briefcase }, ...withStudent.slice(withStudent.findIndex(i => i.href === '/spend') + 1)] : withStudent;
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   return (
@@ -41,13 +39,6 @@ export function Sidebar({ name, email, showStudent, showWork }: { name: string; 
             );
           })}
         </nav>
-        <div className="sidebar-foot">
-          <div className="user-chip">
-            <strong>{name || 'Signed in'}</strong>
-            <span className="muted small">{email}</span>
-          </div>
-          <LogoutButton />
-        </div>
       </aside>
 
       <nav className="mobile-nav" aria-label="Main">

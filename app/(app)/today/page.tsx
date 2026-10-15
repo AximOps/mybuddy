@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { addEvent, toggleEvent } from '@/app/actions';
 import { withUser } from '@/lib/db';
-import { listTasks, personalWorkspaceId, routineForDay } from '@/lib/planner';
+import { listRoutines, listTasks, personalWorkspaceId, routineForDay } from '@/lib/planner';
+import { Hero } from '@/components/Hero';
 import { getCurrentUser } from '@/lib/session';
 import { fmtMinutes, dateKeyIn, isDateKey, longDate, shiftDateKey, weekdayOf } from '@/lib/time';
 import { getSettings } from '@/lib/settings';
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const user = await getCurrentUser();
   const { day: requested } = await searchParams;
-  const { routineName, events, dueTasks, today, day, student } = await withUser(user!.id, async c => {
+  const { routineName, events, dueTasks, today, day, student, routines, greeting, emoji } = await withUser(user!.id, async c => {
     const { timezone } = await getSettings(c, user!.id);
     const todayKey = dateKeyIn(timezone);
     const dayKey = isDateKey(requested) ? requested : todayKey;
@@ -26,7 +27,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       student.deadlines = (await c.query(`select title, kind, due_date::text as due_date, due_time from deadlines where workspace_id = $1 and done = false and deleted_at is null and (due_date = $2 or ($3 and due_date < $2)) order by due_date, coalesce(due_time, 1440)`, [ws, dayKey, dayKey === todayKey])).rows;
       student.exams = (await c.query(`select title, due_date::text as due_date from deadlines where workspace_id = $1 and kind = 'exam' and done = false and deleted_at is null and due_date > $2 and due_date <= ($2::date + 14) order by due_date`, [ws, dayKey])).rows;
     }
-    return { ...routine, dueTasks: tasks, today: todayKey, day: dayKey, student };
+    const routines = await listRoutines(c, ws);
+    const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: settings.timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+    const period = hour >= 5 && hour < 12 ? ['🌅', 'Good morning'] : hour < 17 ? ['☀️', 'Good afternoon'] : hour < 21 ? ['🌇', 'Good evening'] : ['🌙', 'Good night'];
+    return { ...routine, dueTasks: tasks, today: todayKey, day: dayKey, student, routines, greeting: `${period[1]}, ${(user!.name || 'buddy').split(' ')[0]}`, emoji: period[0] };
   });
 
   const done = events.filter(e => e.done).length;
@@ -37,7 +41,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     <>
       <div className="page-head">
         <div>
-          <h1>{day === today ? 'Today' : longDate(day)}</h1>
+          {day === today ? <Hero emoji={emoji} greeting={greeting} /> : <h1>{longDate(day)}</h1>}
           <p>{routineName ? `Routine: ${routineName}` : 'No routine for this day'}</p>
         </div>
         <div className="actions">
@@ -158,6 +162,31 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           </details>
         </div>
       </div>
+
+      <section className="card flush" style={{ marginTop: 20 }}>
+        <div className="card-head">
+          <h2>Routines</h2>
+          <Link className="small muted" href="/routines">Manage ›</Link>
+        </div>
+        {routines.length === 0 ? <div className="empty">No routines yet.</div> : (
+          <ul className="routine-list">
+            {routines.map(r => (
+              <li key={r.id} className="routine-row">
+                <span className="routine-dot" style={{ background: r.color }} aria-hidden="true" />
+                <div className="routine-name">
+                  <strong>{r.name}</strong>
+                  <span className="small muted">{r.events.length} activities</span>
+                </div>
+                <div className="routine-days" aria-label="Weekdays">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                    <span key={i} className={r.days.includes(i) ? 'on' : ''}>{d}</span>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </>
   );
 }

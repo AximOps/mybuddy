@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
+import { BuddyLogo } from './BuddyLogo';
 import { FREE_FEATURES, PERIOD, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
 
 type Mode = 'login' | 'signup';
@@ -38,8 +39,8 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
     <div className="auth">
       <aside className="auth-brand">
         <div className="brand" style={{ padding: 0 }}>
-          <span className="brand-mark" style={{ background: '#fff', color: 'var(--accent)' }} aria-hidden="true">🙂</span>
-          My Buddy
+          <BuddyLogo size={36} />
+          <span className="brand-name">My Buddy</span>
         </div>
 
         <div className="auth-hero">
