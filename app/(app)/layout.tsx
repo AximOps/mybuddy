@@ -7,6 +7,7 @@ import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { withUser } from '@/lib/db';
 import { isPlatformAdmin } from '@/lib/admin';
 import { getSettings } from '@/lib/settings';
+import { isPremium } from '@/lib/entitlements';
 import { getCurrentUser } from '@/lib/session';
 import { APP_TZ } from '@/lib/time';
 
@@ -17,7 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: APP_TZ });
   return (
     <div className="app">
-      <Sidebar showStudent={settings.studentEnabled} showWork={settings.mode === 'work'} />
+      <Sidebar showStudent={settings.studentEnabled && isPremium(settings)} showWork={settings.mode === 'work' && isPremium(settings)} premium={isPremium(settings)} />
       <div className="main">
         <header className="topbar">
           <span className="mobile-brand"><BrandLockup size={30} /></span>

@@ -1,6 +1,7 @@
 import { withUser } from '@/lib/db';
 import { activeWorkspaceId } from '@/lib/workspace';
 import { getCurrentUser } from '@/lib/session';
+import { userHasPremium } from '@/lib/entitlements';
 import { getSettings } from '@/lib/settings';
 import { entriesForReport } from '@/lib/work-queries';
 import { employeeProjectRows, hoursText, reportLines, reportPdf, toCsv } from '@/lib/work';
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) return new Response('Not signed in', { status: 401 });
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return new Response('Premium feature. Start a free trial or upgrade to download this.', { status: 402 });
   const url = new URL(request.url);
   const from = url.searchParams.get('from') ?? '';
   const to = url.searchParams.get('to') ?? '';

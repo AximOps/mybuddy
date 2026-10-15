@@ -6,6 +6,7 @@ import { Hero } from '@/components/Hero';
 import { getCurrentUser } from '@/lib/session';
 import { fmtMinutes, dateKeyIn, isDateKey, longDate, shiftDateKey, weekdayOf } from '@/lib/time';
 import { getSettings } from '@/lib/settings';
+import { isPremium } from '@/lib/entitlements';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     const tasks = (await listTasks(c, ws)).filter(t =>
       !t.done && t.dueDate !== null && (t.dueDate === dayKey || (dayKey === todayKey && t.dueDate < todayKey)));
     let student = { classes: [] as { title: string; kind: string; start_min: number; end_min: number; room: string }[], deadlines: [] as { title: string; kind: string; due_date: string; due_time: number | null }[], exams: [] as { title: string; due_date: string }[] };
-    if (settings.studentEnabled) {
+    if (settings.studentEnabled && isPremium(settings)) {
       student.classes = (await c.query(`select title, kind, start_min, end_min, room from classes where workspace_id = $1 and weekday = $2 and deleted_at is null order by start_min`, [ws, weekdayOf(dayKey)])).rows;
       student.deadlines = (await c.query(`select title, kind, due_date::text as due_date, due_time from deadlines where workspace_id = $1 and done = false and deleted_at is null and (due_date = $2 or ($3 and due_date < $2)) order by due_date, coalesce(due_time, 1440)`, [ws, dayKey, dayKey === todayKey])).rows;
       student.exams = (await c.query(`select title, due_date::text as due_date from deadlines where workspace_id = $1 and kind = 'exam' and done = false and deleted_at is null and due_date > $2 and due_date <= ($2::date + 14) order by due_date`, [ws, dayKey])).rows;

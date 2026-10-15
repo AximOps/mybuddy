@@ -2,6 +2,7 @@ import { withUser } from '@/lib/db';
 import { personalWorkspaceId } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
 import { getSettings, money } from '@/lib/settings';
+import { isPremium } from '@/lib/entitlements';
 import { SPEND_CATEGORIES } from '@/lib/tags';
 import { dateKeyIn, shiftDateKey, weekdayOf } from '@/lib/time';
 
@@ -78,7 +79,7 @@ export default async function StatsPage() {
       `select tag, count(*)::int as n from notes where workspace_id = $1 and deleted_at is null group by tag order by n desc`, [ws]);
 
     return {
-      week, streak, currency: settings.currency,
+      week, streak, currency: settings.currency, premium: isPremium(settings),
       focus: focus.rows[0], tasksDone: tasks.rows[0].n, routines: routines.rows[0].n,
       spend: spend.rows, todo: todo.rows[0], notes: notes.rows[0], noteTags: noteTags.rows,
     };
@@ -117,6 +118,7 @@ export default async function StatsPage() {
       </section>
 
       <div className="layout-2" style={{ marginBottom: 20 }}>
+        {data.premium ? (
         <section className="card card-body">
           <h2 style={{ marginBottom: 12 }}>Spending this month</h2>
           {data.spend.length === 0 ? <p className="muted small">No spending recorded this month.</p> : (
@@ -134,6 +136,7 @@ export default async function StatsPage() {
             </ul>
           )}
         </section>
+        ) : null}
         <div className="stack">
           <section className="card card-body">
             <h2 style={{ marginBottom: 10 }}>To-do</h2>

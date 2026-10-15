@@ -3,6 +3,7 @@ import { withUser } from '@/lib/db';
 import { CURRENCIES, getSettings } from '@/lib/settings';
 import { FREE_FEATURES, PERIOD, PREMIUM_ENABLED, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
 import { startFreeTrial } from '@/app/actions';
+import { isPremium } from '@/lib/entitlements';
 import { customTags } from '@/lib/tags';
 import { getCurrentUser } from '@/lib/session';
 import { dateKeyIn } from '@/lib/time';
@@ -105,8 +106,8 @@ export default async function SettingsPage() {
         {section('Mode', (
           <form action={updateMode} className="card-body actions">
             <button type="submit" name="mode" value="personal" className={`btn ${settings.mode === 'personal' ? 'primary' : ''}`}>Personal</button>
-            <button type="submit" name="mode" value="student" className={`btn ${settings.mode === 'student' ? 'primary' : ''}`}>Student</button>
-            <button type="submit" name="mode" value="work" className={`btn ${settings.mode === 'work' ? 'primary' : ''}`}>Work</button>
+            <button type="submit" name="mode" value="student" className={`btn ${settings.mode === 'student' ? 'primary' : ''}`} disabled={!isPremium(settings)}>Student{isPremium(settings) ? '' : ' (Premium)'}</button>
+            <button type="submit" name="mode" value="work" className={`btn ${settings.mode === 'work' ? 'primary' : ''}`} disabled={!isPremium(settings)}>Work{isPremium(settings) ? '' : ' (Premium)'}</button>
           </form>
         ))}
 

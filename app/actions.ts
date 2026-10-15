@@ -8,6 +8,7 @@ import { personalWorkspaceId } from '@/lib/planner';
 import { resolveTag } from '@/lib/tags';
 import { reportLines } from '@/lib/work';
 import { getSettings } from '@/lib/settings';
+import { userHasPremium } from '@/lib/entitlements';
 import { activeWorkspaceId, weekStartOf, WORKSPACE_COOKIE } from '@/lib/workspace';
 import { parseMoney, zonedToUtc } from '@/lib/time';
 import { cookies } from 'next/headers';
@@ -395,6 +396,7 @@ export async function clearCompletedTasks() {
 
 export async function addExpense(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const amount = parseMoney(formData.get('amount'));
   const day = String(formData.get('day') ?? '');
   const note = text(formData.get('note'), 120);
@@ -412,6 +414,7 @@ export async function addExpense(formData: FormData) {
 
 export async function deleteExpense(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
@@ -423,6 +426,7 @@ export async function deleteExpense(formData: FormData) {
 
 export async function setMonthlyBudget(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const raw = String(formData.get('budget') ?? '').trim();
   const minor = raw === '' ? null : parseMoney(raw);
   if (raw !== '' && minor === null) return;
@@ -454,6 +458,7 @@ export async function updateAppearance(formData: FormData) {
 export async function updateMode(formData: FormData) {
   const user = await requireUser();
   const mode = String(formData.get('mode') ?? '');
+  if (mode !== 'personal' && !(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // Student and Work are premium
   if (!['student', 'personal', 'work'].includes(mode)) return;
   await withUser(user.id, async c => {
     await c.query(
@@ -466,6 +471,7 @@ export async function updateMode(formData: FormData) {
 
 export async function updateStudentTools(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const enabled = formData.get('enabled') === 'on';
   const level = String(formData.get('level') ?? '') === 'school' ? 'school' : 'college';
   await withUser(user.id, async c => {
@@ -553,6 +559,7 @@ const optionalUuid = (v: FormDataEntryValue | null) => (isUuid(String(v ?? '')) 
 
 export async function addSubject(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const name = text(formData.get('name'), 60);
   const credits = num(formData.get('credits')) ?? 0;
   const gp = num(formData.get('gradePoint'));
@@ -567,6 +574,7 @@ export async function addSubject(formData: FormData) {
 
 export async function updateSubject(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   const name = text(formData.get('name'), 60);
   const credits = num(formData.get('credits')) ?? 0;
@@ -581,6 +589,7 @@ export async function updateSubject(formData: FormData) {
 
 export async function deleteSubject(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
@@ -592,6 +601,7 @@ export async function deleteSubject(formData: FormData) {
 
 export async function addMark(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const subjectId = String(formData.get('subjectId') ?? '');
   const title = text(formData.get('title'), 80);
   const score = num(formData.get('score'));
@@ -608,6 +618,7 @@ export async function addMark(formData: FormData) {
 
 export async function deleteMark(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   const subjectId = String(formData.get('subjectId') ?? '');
   if (!isUuid(id)) return;
@@ -620,6 +631,7 @@ export async function deleteMark(formData: FormData) {
 
 export async function addClass(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const title = text(formData.get('title'), 60);
   const kind = String(formData.get('kind') ?? 'lecture');
   const weekday = Number(formData.get('weekday'));
@@ -639,6 +651,7 @@ export async function addClass(formData: FormData) {
 
 export async function deleteClass(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
@@ -650,6 +663,7 @@ export async function deleteClass(formData: FormData) {
 
 export async function addDeadline(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const title = text(formData.get('title'), 120);
   const kind = String(formData.get('kind') ?? 'assignment');
   const dueDate = String(formData.get('dueDate') ?? '');
@@ -667,6 +681,7 @@ export async function addDeadline(formData: FormData) {
 
 export async function toggleDeadline(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   const done = formData.get('done') === 'true';
   if (!isUuid(id)) return;
@@ -679,6 +694,7 @@ export async function toggleDeadline(formData: FormData) {
 
 export async function deleteDeadline(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
@@ -692,6 +708,7 @@ export async function deleteDeadline(formData: FormData) {
 
 export async function addClient(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const name = text(formData.get('name'), 80);
   if (!name) return;
   await withUser(user.id, async c => {
@@ -703,6 +720,7 @@ export async function addClient(formData: FormData) {
 
 export async function deleteClient(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => { await c.query(`update clients set deleted_at = now() where id = $1`, [id]); });
@@ -711,6 +729,7 @@ export async function deleteClient(formData: FormData) {
 
 export async function addProject(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const name = text(formData.get('name'), 80);
   const clientId = optionalUuid(formData.get('clientId'));
   const rateRaw = String(formData.get('rate') ?? '').trim();
@@ -726,6 +745,7 @@ export async function addProject(formData: FormData) {
 
 export async function deleteProject(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => { await c.query(`update projects set deleted_at = now() where id = $1`, [id]); });
@@ -734,6 +754,7 @@ export async function deleteProject(formData: FormData) {
 
 export async function startTimer(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const projectId = String(formData.get('projectId') ?? '');
   const note = text(formData.get('note'), 160);
   if (!isUuid(projectId)) return;
@@ -749,6 +770,7 @@ export async function startTimer(formData: FormData) {
 /** Stops the running timer and saves it as a time entry on the day it started (in the person's time zone). */
 export async function stopTimer() {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   await withUser(user.id, async c => {
     const settings = await getSettings(c, user.id);
     const row = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string } | null }>(
@@ -778,6 +800,7 @@ export async function stopTimer() {
 
 export async function addTimeEntry(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const projectId = String(formData.get('projectId') ?? '');
   const day = String(formData.get('day') ?? '');
   const start = parseHM(formData.get('start'));
@@ -799,6 +822,7 @@ export async function addTimeEntry(formData: FormData) {
 
 export async function deleteTimeEntry(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
@@ -811,6 +835,7 @@ export async function deleteTimeEntry(formData: FormData) {
 
 export async function addMeeting(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const title = text(formData.get('title'), 120);
   const meetingOn = String(formData.get('meetingOn') ?? '');
   const start = formData.get('start') ? parseHM(formData.get('start')) : null;
@@ -830,6 +855,7 @@ export async function addMeeting(formData: FormData) {
 
 export async function updateMeeting(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   const title = text(formData.get('title'), 120);
   const meetingOn = String(formData.get('meetingOn') ?? '');
@@ -846,6 +872,7 @@ export async function updateMeeting(formData: FormData) {
 
 export async function deleteMeeting(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => { await c.query(`update meetings set deleted_at = now() where id = $1`, [id]); });
@@ -855,6 +882,7 @@ export async function deleteMeeting(formData: FormData) {
 
 export async function addMeetingAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const meetingId = String(formData.get('meetingId') ?? '');
   const t = text(formData.get('text'), 200);
   if (!isUuid(meetingId) || !t) return;
@@ -869,6 +897,7 @@ export async function addMeetingAction(formData: FormData) {
 
 export async function toggleMeetingAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => { await c.query(`update meeting_actions set done = not done where id = $1`, [id]); });
@@ -878,6 +907,7 @@ export async function toggleMeetingAction(formData: FormData) {
 /** Copies an action item into the To-Do list, tagged Work. */
 export async function actionToTask(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
@@ -893,6 +923,7 @@ export async function actionToTask(formData: FormData) {
 
 export async function deleteMeetingAction(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => { await c.query(`delete from meeting_actions where id = $1`, [id]); });
@@ -902,6 +933,7 @@ export async function deleteMeetingAction(formData: FormData) {
 /** Creates an invoice for one client and period. The lines are saved with it, so later edits don't change it. */
 export async function createInvoice(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const clientId = String(formData.get('clientId') ?? '');
   const from = String(formData.get('from') ?? '');
   const to = String(formData.get('to') ?? '');
@@ -942,6 +974,7 @@ async function orgRoleOf(c: import('pg').PoolClient, orgId: string, userId: stri
 
 export async function createOrganisation(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const name = text(formData.get('name'), 120);
   if (!name) return;
   await withUser(user.id, async c => {
@@ -952,6 +985,7 @@ export async function createOrganisation(formData: FormData) {
 
 export async function inviteMember(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const orgId = String(formData.get('orgId') ?? '');
   const email = text(formData.get('email'), 254).toLowerCase();
   const role = String(formData.get('role') ?? 'member') as OrgRole;
@@ -983,6 +1017,7 @@ export async function inviteMember(formData: FormData) {
 
 export async function revokeInvite(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
@@ -993,6 +1028,7 @@ export async function revokeInvite(formData: FormData) {
 
 export async function acceptInvitation(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const { hashToken } = await import('@/lib/invite');
   const token = String(formData.get('token') ?? '');
   if (!token) redirect('/organisation');
@@ -1011,6 +1047,7 @@ export async function acceptInvitation(formData: FormData) {
 /** Changes someone's role. Admins manage members and admins; only owners change owners or make owners. */
 export async function changeMemberRole(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const orgId = String(formData.get('orgId') ?? '');
   const userId = String(formData.get('userId') ?? '');
   const role = String(formData.get('role') ?? '') as OrgRole;
@@ -1032,6 +1069,7 @@ export async function changeMemberRole(formData: FormData) {
 /** Removes someone from the organisation. Admins cannot remove owners or themselves. */
 export async function removeMember(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const orgId = String(formData.get('orgId') ?? '');
   const userId = String(formData.get('userId') ?? '');
   if (!isUuid(orgId) || !userId || userId === user.id) return;
@@ -1059,6 +1097,7 @@ async function weekIsApproved(c: import('pg').PoolClient, ws: string, userId: st
 
 export async function setActiveWorkspace(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const ws = String(formData.get('ws') ?? '');
   if (!isUuid(ws)) return;
   const allowed = await withUser(user.id, async c => {
@@ -1072,6 +1111,7 @@ export async function setActiveWorkspace(formData: FormData) {
 /** Sends a week for approval. Only organisation workspaces have approvals. */
 export async function submitTimesheet(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const weekStart = String(formData.get('weekStart') ?? '');
   if (!isDateKey(weekStart)) return;
   await withUser(user.id, async c => {
@@ -1089,6 +1129,7 @@ export async function submitTimesheet(formData: FormData) {
 /** Approve or reject a submitted week. Only owners and admins of the organisation can do this. */
 export async function decideTimesheet(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
   const decision = String(formData.get('decision') ?? '');
   const note = text(formData.get('note'), 300);

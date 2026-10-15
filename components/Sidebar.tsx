@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
+import { Lock, BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
 import { BrandLockup } from './BuddyLogo';
 
 const ITEMS = [
@@ -16,7 +16,8 @@ const ITEMS = [
 ];
 
 /** Side navigation on desktop, and a bottom bar with the same links on phones. */
-export function Sidebar({ showStudent, showWork }: { name?: string; email?: string; showStudent: boolean; showWork: boolean }) {
+export function Sidebar({ showStudent, showWork, premium }: { name?: string; email?: string; showStudent: boolean; showWork: boolean; premium: boolean }) {
+  const PREMIUM_HREFS = ['/spend', '/organisation', '/student', '/work'];
   const pathname = usePathname();
   const withStudent = showStudent ? [...ITEMS.slice(0, 4), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(4)] : ITEMS;
   const items = showWork ? [...withStudent.slice(0, withStudent.findIndex(i => i.href === '/spend') + 1), { href: '/work', label: 'Work', icon: Briefcase }, ...withStudent.slice(withStudent.findIndex(i => i.href === '/spend') + 1)] : withStudent;
@@ -34,6 +35,7 @@ export function Sidebar({ showStudent, showWork }: { name?: string; email?: stri
               <Link key={item.href} href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
                 <Icon size={18} strokeWidth={1.9} aria-hidden="true" />
                 {item.label}
+                {!premium && PREMIUM_HREFS.includes(item.href) ? <Lock size={13} strokeWidth={2.2} aria-label="Premium" className="lock-icon" /> : null}
               </Link>
             );
           })}

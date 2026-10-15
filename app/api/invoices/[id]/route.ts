@@ -1,5 +1,6 @@
 import { withUser } from '@/lib/db';
 import { getCurrentUser } from '@/lib/session';
+import { userHasPremium } from '@/lib/entitlements';
 import { invoicePdf, type ReportLine } from '@/lib/work';
 import { isUuid } from '@/lib/time';
 
@@ -9,6 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return new Response('Not signed in', { status: 401 });
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return new Response('Premium feature. Start a free trial or upgrade to download this.', { status: 402 });
   const { id } = await params;
   if (!isUuid(id)) return new Response('Not found', { status: 404 });
 

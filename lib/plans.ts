@@ -2,7 +2,7 @@
  * Plans and what they include. While PREMIUM_ENABLED is false every feature is free, the same
  * switch the phone app uses. Turn it on when payments are connected.
  */
-export const PREMIUM_ENABLED = false;
+export const PREMIUM_ENABLED = true;
 export const PRICE = '$10';
 export const PERIOD = 'per year';
 
