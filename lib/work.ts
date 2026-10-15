@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 
-export interface EntryRow { project_id: string; project_name: string; client_name: string | null; hourly_rate_minor: number; start_min: number; end_min: number; billable: boolean }
+export interface EntryRow { project_id: string; project_name: string; client_name: string | null; hourly_rate_minor: number; start_min: number; end_min: number; billable: boolean; user_id?: string; user_name?: string; user_email?: string }
 
 export interface ReportLine { project: string; client: string; hours: number; billableHours: number; rateMinor: number; amountMinor: number }
 
@@ -125,4 +125,40 @@ export async function reportPdf(o: { title: string; period: string; currency: st
   text(`Total hours: ${o.totalHours.toFixed(2)}`, 50, 11, bold);
   text(`Billable total: ${moneyText(o.totalMinor, o.currency)}`, 330, 11, bold);
   return doc.save();
+}
+
+export interface PersonLine { person: string; minutes: number; billableMinutes: number; amountMinor: number }
+
+/** Totals per employee across all projects. Amount uses each project's hourly rate. */
+export function employeeSummary(entries: EntryRow[]): PersonLine[] {
+  const byPerson = new Map<string, PersonLine>();
+  for (const e of entries) {
+    const key = e.user_id ?? 'unknown';
+    const minutes = e.end_min - e.start_min;
+    const row = byPerson.get(key) ?? { person: e.user_name || e.user_email || 'Unknown', minutes: 0, billableMinutes: 0, amountMinor: 0 };
+    row.minutes += minutes;
+    if (e.billable) {
+      row.billableMinutes += minutes;
+      row.amountMinor += Math.round((minutes * e.hourly_rate_minor) / 60);
+    }
+    byPerson.set(key, row);
+  }
+  return [...byPerson.values()].sort((a, b) => b.amountMinor - a.amountMinor || a.person.localeCompare(b.person));
+}
+
+/** Team CSV rows: one row per employee and project. */
+export function employeeProjectRows(entries: EntryRow[]): (string | number)[][] {
+  const map = new Map<string, { person: string; project: string; client: string; minutes: number; rate: number; amount: number }>();
+  for (const e of entries.filter(x => x.billable)) {
+    const key = `${e.user_id}|${e.project_id}`;
+    const minutes = e.end_min - e.start_min;
+    const row = map.get(key) ?? { person: e.user_name || e.user_email || 'Unknown', project: e.project_name, client: e.client_name ?? '-', minutes: 0, rate: e.hourly_rate_minor, amount: 0 };
+    row.minutes += minutes;
+    row.amount += Math.round((minutes * e.hourly_rate_minor) / 60);
+    map.set(key, row);
+  }
+  return [
+    ['Employee', 'Project', 'Client', 'Billable hours', 'Rate per hour', 'Amount'],
+    ...[...map.values()].map(r => [r.person, r.project, r.client, hoursText(r.minutes / 60), (r.rate / 100).toFixed(2), (r.amount / 100).toFixed(2)]),
+  ];
 }

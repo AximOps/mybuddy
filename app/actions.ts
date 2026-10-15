@@ -959,6 +959,8 @@ export async function inviteMember(formData: FormData) {
   const { newInviteToken, INVITE_DAYS, inviteUrl } = await import('@/lib/invite');
   const { token, hash } = newInviteToken();
   let link = '';
+  let orgName = '';
+  let inviter = user.name || user.email;
   await withUser(user.id, async c => {
     const mine = await orgRoleOf(c, orgId, user.id);
     if (!mine || mine === 'member') return;
@@ -967,10 +969,16 @@ export async function inviteMember(formData: FormData) {
       `insert into invitations (id, organisation_id, email, role, token_hash, invited_by, expires_at)
        values ($1, $2, $3, $4, $5, $6, now() + ($7 || ' days')::interval)`,
       [randomUUID(), orgId, email, role, hash, user.id, String(INVITE_DAYS)]);
+    orgName = (await c.query<{ name: string }>(`select name from organisations where id = $1`, [orgId])).rows[0]?.name ?? 'your team';
     link = inviteUrl(token);
   });
+  if (!link) return;
+  const { sendMail } = await import('@/lib/mail');
+  const result = await sendMail(email, `${inviter} invited you to ${orgName} on My Buddy`,
+    `${inviter} invited you to join ${orgName} on My Buddy.\n\nOpen this link and log in with ${email} to accept:\n${link}\n\nThe link works once and expires in ${INVITE_DAYS} days.`);
   revalidatePath('/organisation');
-  if (link) redirect(`/organisation?invited=${encodeURIComponent(link)}`);
+  if (result.sent) redirect(`/organisation?sent=${encodeURIComponent(email)}`);
+  redirect(`/organisation?invited=${encodeURIComponent(link)}${result.error ? `&mailError=${encodeURIComponent(result.error)}` : ''}`);
 }
 
 export async function revokeInvite(formData: FormData) {

@@ -8,7 +8,7 @@ import { getSettings, money } from '@/lib/settings';
 import { activeWorkspaceId, weekStartOf } from '@/lib/workspace';
 import { decideTimesheet, setActiveWorkspace, submitTimesheet } from '@/app/actions';
 import { entriesForReport } from '@/lib/work-queries';
-import { hmText, reportLines } from '@/lib/work';
+import { employeeSummary, hmText, reportLines } from '@/lib/work';
 import { dateKeyIn, fmtMinutes, isDateKey, isUuid, shiftDateKey } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -63,7 +63,9 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
     const from = isDateKey(sp.from ?? '') ? sp.from! : `${today.slice(0, 8)}01`;
     const to = isDateKey(sp.to ?? '') ? sp.to! : today;
     const clientFilter = isUuid(sp.client ?? '') ? sp.client! : null;
-    const lines = reportLines(await entriesForReport(c, ws, from, to, clientFilter));
+    const rangeEntries = await entriesForReport(c, ws, from, to, clientFilter);
+    const lines = reportLines(rangeEntries);
+    const people = employeeSummary(rangeEntries);
     const invoices = (await c.query<{ id: string; number: string; client_name: string; period_start: string; period_end: string; total_minor: number; currency: string }>(
       `select id, number, client_name, period_start::text as period_start, period_end::text as period_end, total_minor, currency
          from invoices where workspace_id = $1 order by created_at desc limit 50`, [ws])).rows;
@@ -77,7 +79,7 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                   and e.spent_on >= t.week_start and e.spent_on < t.week_start + 7) as minutes
          from timesheets t join "user" u on u.id = t.user_id
         where t.workspace_id = $1 and t.status = 'submitted' order by t.submitted_at`, [ws])).rows : [];
-    return { settings, today, timer, clients, projects, weekDays, monday, sunday, entries, meetings, meeting, actions, from, to, clientFilter, lines, invoices, wsList, ws, activeKind, isAdmin, timesheet, approvals };
+    return { settings, today, timer, clients, projects, weekDays, monday, sunday, entries, meetings, meeting, actions, from, to, clientFilter, lines, people, invoices, wsList, ws, activeKind, isAdmin, timesheet, approvals };
   });
 
   const cur = data.settings.currency;
@@ -352,6 +354,22 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
             <div className="card stat"><div className="label">Billable hours</div><div className="value num">{(data.lines.reduce((s, l) => s + l.billableHours, 0)).toFixed(2)}</div></div>
             <div className="card stat"><div className="label">Billable amount</div><div className="value num">{money(data.lines.reduce((s, l) => s + l.amountMinor, 0), cur)}</div></div>
           </div>
+
+          {data.isAdmin && data.activeKind === 'organisation' ? (
+            <section className="card flush" style={{ marginBottom: 20 }}>
+              <div className="card-head"><h2>By employee</h2><span className="muted small">{data.people.length} people</span></div>
+              {data.people.length === 0 ? <div className="empty">No time logged by the team in this range.</div> : (
+                <table className="table">
+                  <thead><tr><th>Employee</th><th className="num">Hours</th><th className="num">Billable hours</th><th className="num">Billable amount</th></tr></thead>
+                  <tbody>
+                    {data.people.map(p => (
+                      <tr key={p.person}><td><strong>{p.person}</strong></td><td className="num">{hmText(p.minutes)}</td><td className="num">{hmText(p.billableMinutes)}</td><td className="num">{money(p.amountMinor, cur)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          ) : null}
 
           <section className="card flush" style={{ marginBottom: 20 }}>
             <div className="card-head">

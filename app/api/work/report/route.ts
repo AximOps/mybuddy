@@ -3,7 +3,7 @@ import { activeWorkspaceId } from '@/lib/workspace';
 import { getCurrentUser } from '@/lib/session';
 import { getSettings } from '@/lib/settings';
 import { entriesForReport } from '@/lib/work-queries';
-import { hoursText, reportLines, reportPdf, toCsv } from '@/lib/work';
+import { employeeProjectRows, hoursText, reportLines, reportPdf, toCsv } from '@/lib/work';
 import { isDateKey, isUuid } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
@@ -23,8 +23,10 @@ export async function GET(request: Request) {
   const result = await withUser(user.id, async c => {
     const ws = await activeWorkspaceId(c, user.id);
     const settings = await getSettings(c, user.id);
-    const lines = reportLines(await entriesForReport(c, ws, from, to, clientId));
-    return { lines, currency: settings.currency };
+    const kind = (await c.query<{ kind: string }>(`select kind from workspaces where id = $1`, [ws])).rows[0]?.kind;
+    const entries = await entriesForReport(c, ws, from, to, clientId);
+    const team = kind === 'organisation' && (await c.query<{ a: boolean }>(`select is_workspace_admin($1) as a`, [ws])).rows[0].a;
+    return { lines: reportLines(entries), entries, team, currency: settings.currency };
   });
 
   const totalMinor = result.lines.reduce((s, l) => s + l.amountMinor, 0);
@@ -32,10 +34,12 @@ export async function GET(request: Request) {
   const name = `hours-${from}-to-${to}`;
 
   if (format === 'csv') {
-    const rows: (string | number)[][] = [
-      ['Project', 'Client', 'Billable hours', 'Rate per hour', `Amount (${result.currency})`],
-      ...result.lines.map(l => [l.project, l.client, hoursText(l.billableHours), (l.rateMinor / 100).toFixed(2), (l.amountMinor / 100).toFixed(2)]),
-    ];
+    const rows: (string | number)[][] = result.team
+      ? employeeProjectRows(result.entries)
+      : [
+        ['Project', 'Client', 'Billable hours', 'Rate per hour', `Amount (${result.currency})`],
+        ...result.lines.map(l => [l.project, l.client, hoursText(l.billableHours), (l.rateMinor / 100).toFixed(2), (l.amountMinor / 100).toFixed(2)]),
+      ];
     return new Response(toCsv(rows), {
       headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}.csv"` },
     });

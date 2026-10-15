@@ -9,9 +9,9 @@ export const dynamic = 'force-dynamic';
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Employee' };
 
-async function OrganisationPageContent({ searchParams }: { searchParams: Promise<{ invited?: string }> }) {
+async function OrganisationPageContent({ searchParams }: { searchParams: Promise<{ invited?: string; sent?: string; mailError?: string }> }) {
   const user = await getCurrentUser();
-  const { invited } = await searchParams;
+  const { invited, sent, mailError } = await searchParams;
 
   const data = await withUser(user!.id, async c => {
     const orgs = (await c.query<{ id: string; name: string; role: string }>(
@@ -50,10 +50,19 @@ async function OrganisationPageContent({ searchParams }: { searchParams: Promise
         <div><h1>{data.org.name}</h1><p>Your role: {ROLE_LABEL[data.mine ?? 'member']} · {data.members.length} members</p></div>
       </div>
 
+      {sent ? (
+        <section className="card card-body" style={{ marginBottom: 20, borderColor: 'var(--success)' }}>
+          <h2>Invitation emailed</h2>
+          <p className="small muted">An invitation was sent to {sent}. It works once and expires in 7 days.</p>
+        </section>
+      ) : null}
       {invited ? (
         <section className="card card-body" style={{ marginBottom: 20, borderColor: 'var(--accent)' }}>
           <h2 style={{ marginBottom: 8 }}>Invitation created</h2>
-          <p className="small muted" style={{ marginBottom: 10 }}>Email sending is not set up yet, so copy this link and send it to the person. It works once, and only for the email address you invited. Expires in 7 days.</p>
+          <p className="small muted" style={{ marginBottom: 10 }}>
+            {mailError ? `${mailError} ` : 'Email is not set up, so copy this link and send it yourself. '}
+            It works once, only for the email address you invited, and expires in 7 days.
+          </p>
           <input className="input" readOnly value={invited} aria-label="Invitation link" />
         </section>
       ) : null}
