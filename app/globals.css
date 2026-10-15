@@ -440,3 +440,8 @@ h1 { letter-spacing: -0.02em; }
   .auth-card { padding: 26px 22px; }
   .auth-card h1 { font-size: 24px; }
 }
+
+.auth-solo { grid-template-columns: 1fr; }
+.auth-solo .auth-form { min-height: 100vh; }
+.forgot { align-self: flex-end; margin-top: -6px; text-decoration: none; }
+.forgot:hover { color: var(--accent); }

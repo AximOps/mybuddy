@@ -107,6 +107,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
               <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
                 autoComplete={signup ? 'new-password' : 'current-password'} />
             </label>
+            {!signup ? <Link href="/forgot-password" className="small muted forgot">Forgot password?</Link> : null}
             <button className="btn primary block auth-submit" type="submit" disabled={busy}>
               {busy ? 'Please wait…' : signup ? 'Create account' : 'Log in'}
             </button>
