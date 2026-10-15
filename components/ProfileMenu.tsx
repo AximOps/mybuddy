@@ -1,12 +1,7 @@
 import Link from 'next/link';
 import { Settings, ShieldCheck } from 'lucide-react';
+import { initials } from '@/lib/initials';
 import { LogoutButton } from './LogoutButton';
-
-function initials(name: string, email: string) {
-  const source = name.trim() || email;
-  const parts = source.split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
-}
 
 /** Profile button at the top right, with Settings and Log out. */
 export function ProfileMenu({ name, email, showAdmin = false }: { name: string; email: string; showAdmin?: boolean }) {

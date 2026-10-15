@@ -61,7 +61,7 @@ export default async function SettingsPage() {
         ))}
 
         <section className="card flush" id="plan">
-          <div className="card-head"><h2>Plan</h2><span className="badge accent">{settings.plan === 'premium' ? 'Premium' : 'Free'}</span></div>
+          <div className="card-head"><h2>Plan</h2><span className={`badge ${settings.plan === 'premium' ? 'sun' : ''}`}>{settings.trialActive ? 'Premium trial' : settings.plan === 'premium' ? 'Premium' : 'Free'}</span></div>
           <div className="card-body stack" style={{ gap: 14 }}>
             <p className="small muted">{PREMIUM_ENABLED ? `Premium is ${PRICE} ${PERIOD}.` : 'Every feature is free while we test. Premium will be ' + PRICE + ' ' + PERIOD + ' once payments are connected.'}</p>
             <div className="actions" style={{ justifyContent: 'space-between' }}>
@@ -74,10 +74,19 @@ export default async function SettingsPage() {
               {settings.plan === 'free' && !settings.trialUsed ? (
                 <form action={startFreeTrial}><button type="submit" className="btn primary">Start 15-day free trial</button></form>
               ) : (
-                <button type="button" className="btn primary" disabled>{settings.plan === 'premium' ? 'Premium' : 'Upgrade (payments not connected yet)'}</button>
+                settings.plan === 'premium' ? <span className="badge sun">✦ All features unlocked</span> : <button type="button" className="btn" disabled>Upgrade (payments not connected yet)</button>
               )}
             </div>
-            <div className="small muted">Included: {[...FREE_FEATURES, ...PREMIUM_FEATURES].map(f => f.title).join(', ')}</div>
+            <div className="plan-compare">
+              <div>
+                <div className="small muted" style={{ marginBottom: 8 }}>Free</div>
+                <div className="actions" style={{ gap: 6 }}>{FREE_FEATURES.map(f => <span key={f.title} className="badge">{f.icon} {f.title}</span>)}</div>
+              </div>
+              <div>
+                <div className="small muted" style={{ marginBottom: 8 }}>Premium adds</div>
+                <div className="actions" style={{ gap: 6 }}>{PREMIUM_FEATURES.map(f => <span key={f.title} className="badge accent">{f.icon} {f.title}</span>)}</div>
+              </div>
+            </div>
           </div>
         </section>
 

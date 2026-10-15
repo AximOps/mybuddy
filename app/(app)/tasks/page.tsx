@@ -76,7 +76,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         {shown.length === 0 ? (
           <div className="empty">{status === 'done' ? 'Nothing completed yet.' : 'No tasks here yet.'}</div>
         ) : (
-          <table className="table">
+          <table className="table task-table">
             <thead>
               <tr><th className="check-col" aria-label="Done" /><th>Task</th><th>Tag</th><th>Due</th><th className="action-col" aria-label="Actions" /></tr>
             </thead>

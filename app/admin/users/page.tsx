@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { CheckCircle2, CheckSquare, Clock, NotebookPen, Repeat, Search, Wallet } from 'lucide-react';
 import { withUser } from '@/lib/db';
+import { initials } from '@/lib/initials';
 import { getCurrentUser } from '@/lib/session';
 import { dateKeyIn } from '@/lib/time';
 
@@ -21,41 +23,61 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
       suspended: boolean; trial: boolean;
     }>(`select * from admin_list_users($1, $2, $3, $4)`, [q, plan, PAGE, (page - 1) * PAGE])).rows);
 
-  const link = (p: number) => `/admin/users?${new URLSearchParams({ ...(q ? { q } : {}), ...(plan ? { plan } : {}), page: String(p) })}`;
+  const link = (p: number, nextPlan = plan) => `/admin/users?${new URLSearchParams({ ...(q ? { q } : {}), ...(nextPlan ? { plan: nextPlan } : {}), ...(p > 1 ? { page: String(p) } : {}) })}`;
 
   return (
     <>
-      {sp.deleted ? <section className="card card-body" style={{ marginBottom: 16, borderColor: 'var(--success)' }}>The account was deleted.</section> : null}
+      {sp.deleted ? <div className="notice success" role="status"><CheckCircle2 size={18} aria-hidden="true" /> The account was deleted.</div> : null}
       <div className="page-head">
         <div><h1>Users</h1><p>Find an account, check its plan and activity, then support it.</p></div>
       </div>
-      <form method="get" className="actions" style={{ marginBottom: 16 }}>
-        <input className="input" name="q" defaultValue={q} placeholder="Search name or email" aria-label="Search users" style={{ width: 280 }} />
-        <select className="select" name="plan" defaultValue={plan} aria-label="Plan" style={{ width: 160 }}>
-          <option value="">All plans</option><option value="premium">Premium</option><option value="free">Free</option>
-        </select>
-        <button className="btn" type="submit">Filter</button>
-      </form>
+
+      <div className="filter-bar">
+        <form method="get" className="admin-search" role="search">
+          <Search size={16} aria-hidden="true" />
+          <input className="input" name="q" defaultValue={q} placeholder="Search name or email" aria-label="Search users" />
+          {plan ? <input type="hidden" name="plan" value={plan} /> : null}
+        </form>
+        <nav className="seg" aria-label="Plan">
+          <Link href={link(1, '')} aria-current={plan === '' ? 'true' : undefined}>All plans</Link>
+          <Link href={link(1, 'premium')} aria-current={plan === 'premium' ? 'true' : undefined}>Premium</Link>
+          <Link href={link(1, 'free')} aria-current={plan === 'free' ? 'true' : undefined}>Free</Link>
+        </nav>
+        {q ? <Link className="btn ghost sm" href={link(1)}>Clear search</Link> : null}
+      </div>
 
       <section className="card flush">
-        {rows.length === 0 ? <div className="empty">No accounts match.</div> : (
+        {rows.length === 0 ? <div className="empty">No accounts match{q ? ` “${q}”` : ''}.</div> : (
           <table className="table">
             <thead>
-              <tr><th>Account</th><th>Joined</th><th>Status</th><th>Plan</th><th>Mode</th><th>Last active</th><th className="num">Items</th><th className="action-col" aria-label="Open" /></tr>
+              <tr><th>Account</th><th>Status</th><th>Plan</th><th>Mode</th><th>Joined</th><th>Last active</th><th>Items</th><th className="action-col" aria-label="Open" /></tr>
             </thead>
             <tbody>
               {rows.map(r => (
                 <tr key={r.user_id}>
-                  <td><strong>{r.user_name || '—'}</strong><div className="small muted">{r.user_email}</div></td>
-                  <td className="small">{dateKeyIn('Asia/Kolkata', new Date(r.joined_at))}</td>
-                  <td>{r.suspended ? <span className="badge danger">Suspended</span> : r.trial ? <span className="badge accent">Trial</span> : <span className="badge success">Active</span>}</td>
                   <td>
-                    <span className={`badge ${r.plan === 'premium' ? 'accent' : ''}`}>{r.plan === 'premium' ? 'Premium' : 'Free'}</span>
-                    {r.plan_until ? <div className="small muted">until {dateKeyIn('Asia/Kolkata', new Date(r.plan_until))}</div> : null}
+                    <Link href={`/admin/users/${r.user_id}`} className="user-cell">
+                      <span className="avatar" aria-hidden="true">{initials(r.user_name, r.user_email)}</span>
+                      <span><strong>{r.user_name || 'No name'}</strong><span className="small muted">{r.user_email}</span></span>
+                    </Link>
                   </td>
-                  <td><span className="badge">{r.mode}</span></td>
-                  <td className="small">{r.last_active ? dateKeyIn('Asia/Kolkata', new Date(r.last_active)) : <span className="muted">Never</span>}</td>
-                  <td className="num small">{r.routines} routines · {r.tasks} tasks · {r.notes} notes · {r.expenses} expenses · {r.time_entries} time entries</td>
+                  <td>{r.suspended ? <span className="badge danger">Suspended</span> : r.trial ? <span className="badge warn">Trial</span> : <span className="badge success">Active</span>}</td>
+                  <td>
+                    <span className={`badge ${r.plan === 'premium' ? 'sun' : ''}`}>{r.plan === 'premium' ? 'Premium' : 'Free'}</span>
+                    {r.plan_until ? <div className="small muted" style={{ marginTop: 3 }}>until {dateKeyIn('Asia/Kolkata', new Date(r.plan_until))}</div> : null}
+                  </td>
+                  <td className="small" style={{ textTransform: 'capitalize' }}>{r.mode}</td>
+                  <td className="small num">{dateKeyIn('Asia/Kolkata', new Date(r.joined_at))}</td>
+                  <td className="small num">{r.last_active ? dateKeyIn('Asia/Kolkata', new Date(r.last_active)) : <span className="muted">Never</span>}</td>
+                  <td>
+                    <span className="counts" aria-label={`${r.routines} routines, ${r.tasks} tasks, ${r.notes} notes, ${r.expenses} expenses, ${r.time_entries} time entries`}>
+                      <span title="Routines"><Repeat size={13} aria-hidden="true" />{r.routines}</span>
+                      <span title="Tasks"><CheckSquare size={13} aria-hidden="true" />{r.tasks}</span>
+                      <span title="Notes"><NotebookPen size={13} aria-hidden="true" />{r.notes}</span>
+                      <span title="Expenses"><Wallet size={13} aria-hidden="true" />{r.expenses}</span>
+                      <span title="Time entries"><Clock size={13} aria-hidden="true" />{r.time_entries}</span>
+                    </span>
+                  </td>
                   <td className="action-col"><Link className="btn sm" href={`/admin/users/${r.user_id}`}>Open</Link></td>
                 </tr>
               ))}
@@ -63,9 +85,9 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
           </table>
         )}
       </section>
-      <div className="actions" style={{ justifyContent: 'space-between', marginTop: 14 }}>
+      <div className="pager">
         {page > 1 ? <Link className="btn" href={link(page - 1)}>‹ Previous</Link> : <span />}
-        <span className="small muted">Page {page}</span>
+        <span className="small muted">Page {page}{rows.length ? ` · ${rows.length} shown` : ''}</span>
         {rows.length === PAGE ? <Link className="btn" href={link(page + 1)}>Next ›</Link> : <span />}
       </div>
     </>

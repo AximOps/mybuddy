@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Lock, BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
+import { Lock, Sparkles, BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
 import { BrandLockup } from './BuddyLogo';
 
 const ITEMS = [
@@ -16,7 +16,7 @@ const ITEMS = [
 ];
 
 /** Side navigation on desktop, and a bottom bar with the same links on phones. */
-export function Sidebar({ showStudent, showWork, premium }: { name?: string; email?: string; showStudent: boolean; showWork: boolean; premium: boolean }) {
+export function Sidebar({ showStudent, showWork, premium, trialUntil = null }: { name?: string; email?: string; showStudent: boolean; showWork: boolean; premium: boolean; trialUntil?: string | null }) {
   const PREMIUM_HREFS = ['/focus', '/spend', '/organisation', '/student', '/work'];
   const pathname = usePathname();
   const withStudent = showStudent ? [...ITEMS.slice(0, 4), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(4)] : ITEMS;
@@ -40,6 +40,18 @@ export function Sidebar({ showStudent, showWork, premium }: { name?: string; ema
             );
           })}
         </nav>
+        {premium ? (
+          <div className="sidebar-plan">
+            <span className="plan-chip"><Sparkles size={13} aria-hidden="true" /> {trialUntil ? 'Premium trial' : 'Premium'}</span>
+            <span className="small muted">{trialUntil ? `Free until ${new Date(trialUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}. Every feature is unlocked.` : 'Every feature is unlocked. Thanks for supporting My Buddy.'}</span>
+          </div>
+        ) : (
+          <div className="sidebar-plan is-free">
+            <strong>Unlock Premium</strong>
+            <span className="small muted">Focus timer, spending, student, work and teams. Free for 15 days.</span>
+            <Link href="/settings#plan" className="btn primary sm">See plans</Link>
+          </div>
+        )}
       </aside>
 
       <nav className="mobile-nav" aria-label="Main">

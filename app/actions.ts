@@ -1151,5 +1151,5 @@ export async function startFreeTrial() {
   await withUser(user.id, async c => {
     await c.query(`select start_free_trial($1)`, [user.id]);
   });
-  revalidatePath('/settings');
+  revalidatePath('/', 'layout');
 }

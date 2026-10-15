@@ -86,21 +86,26 @@ export function FocusTimer({ record }: { record: (formData: FormData) => Promise
             ))}
           </div>
         </div>
-        <button type="button" className="btn primary block" style={{ height: 40 }} onClick={start}>Start {minutes}-minute focus</button>
+        <button type="button" className="btn primary block" style={{ height: 46 }} onClick={start}>Start {minutes}-minute focus</button>
         {message ? <p className="small" role="status" style={{ marginTop: 14, color: 'var(--success)' }}>{message}</p> : null}
         <p className="small muted" style={{ marginTop: 14 }}>The timer keeps running if you refresh this page. Finished sessions count in Stats.</p>
       </section>
     );
   }
 
+  const R = 120;
+  const C = 2 * Math.PI * R;
   return (
-    <section className="card card-body" style={{ maxWidth: 560, textAlign: 'center' }}>
-      <div className="small muted">{running ? 'Focusing' : 'Paused'}{session.title ? ` · ${session.title}` : ''}</div>
-      <div style={{ fontSize: 64, fontWeight: 650, letterSpacing: '-0.02em', fontVariant: 'tabular-nums', margin: '12px 0' }} aria-live="polite">
-        {clock(remaining)}
+    <section className="card card-body focus-run" style={{ maxWidth: 560 }}>
+      <div className="focus-status"><span className={`focus-dot ${running ? 'on' : ''}`} aria-hidden="true" />{running ? 'Focusing' : 'Paused'}{session.title ? ` · ${session.title}` : ''}</div>
+      <div className="focus-ring">
+        <svg viewBox="0 0 280 280" aria-hidden="true">
+          <circle cx="140" cy="140" r={R} className="focus-ring-track" />
+          <circle cx="140" cy="140" r={R} className="focus-ring-fill" strokeDasharray={C} strokeDashoffset={C * (1 - progress)} />
+        </svg>
+        <div className="focus-dial" aria-live="polite">{clock(remaining)}</div>
       </div>
-      <div className="progress" aria-hidden="true"><span style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-      <div className="actions" style={{ justifyContent: 'center', marginTop: 22 }}>
+      <div className="actions" style={{ justifyContent: 'center', marginTop: 8 }}>
         <button type="button" className="btn primary" onClick={running ? pause : resume}>{running ? 'Pause' : 'Resume'}</button>
         <button type="button" className="btn" onClick={stop}>Stop (not counted)</button>
       </div>

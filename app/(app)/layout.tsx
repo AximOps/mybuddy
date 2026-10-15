@@ -15,14 +15,16 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   const { settings, admin } = await withUser(user.id, async c => ({ settings: await getSettings(c, user.id), admin: await isPlatformAdmin(c, user.id) }));
-  const todayLabel = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: APP_TZ });
+  const now = new Date();
+  const weekday = now.toLocaleDateString('en-IN', { weekday: 'long', timeZone: APP_TZ });
+  const dayMonth = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', timeZone: APP_TZ });
   return (
     <div className="app">
-      <Sidebar showStudent={settings.studentEnabled && isPremium(settings)} showWork={settings.mode === 'work' && isPremium(settings)} premium={isPremium(settings)} />
+      <Sidebar showStudent={settings.studentEnabled && isPremium(settings)} showWork={settings.mode === 'work' && isPremium(settings)} premium={isPremium(settings)} trialUntil={settings.trialActive ? settings.planUntil : null} />
       <div className="main">
         <header className="topbar">
           <span className="mobile-brand"><BrandLockup size={30} /></span>
-          <span className="muted small desktop-only">{todayLabel}</span>
+          <span className="topbar-date desktop-only"><strong>{weekday}</strong><span className="small muted">{dayMonth}</span></span>
           <div className="topbar-right">
             <ThemeSwitch initial={settings.theme} />
             <ProfileMenu name={user.name} email={user.email} showAdmin={admin} />

@@ -3,13 +3,10 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bricolage_Grotesque } from 'next/font/google';
 import { Check, Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { FREE_FEATURES, PERIOD, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
 import { BrandLockup } from './BuddyLogo';
-
-const display = Bricolage_Grotesque({ subsets: ['latin'], weight: ['500', '700', '800'], variable: '--font-display', display: 'swap' });
 
 type Mode = 'login' | 'signup';
 
@@ -136,7 +133,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
   };
 
   return (
-    <div className={`auth auth-split ${display.variable}`}>
+    <div className="auth auth-split">
       <aside className="auth-brand">
         <div className="auth-glow" aria-hidden="true" />
         <BrandLockup size={52} large onDark />

@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { AlertTriangle, ChevronDown, ChevronLeft } from 'lucide-react';
+import { initials } from '@/lib/initials';
 import { notFound } from 'next/navigation';
 import { adminAddNote, adminDeleteUser, adminGrantTrial, adminSetPlan, adminSetSuspended } from '@/app/admin/actions';
 import { withUser } from '@/lib/db';
@@ -32,29 +34,39 @@ export default async function AdminUserPage({ params, searchParams }: { params: 
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <Link href="/admin/users" className="small muted">‹ All users</Link>
-          <h1 style={{ marginTop: 6 }}>{d.user.name || 'No name'}</h1>
-          <p>{d.user.email}</p>
+      <Link href="/admin/users" className="btn ghost sm" style={{ marginBottom: 12, paddingLeft: 6 }}><ChevronLeft size={16} aria-hidden="true" /> All users</Link>
+
+      {error ? <div className="notice danger" role="alert"><AlertTriangle size={18} aria-hidden="true" /><strong>{error}</strong></div> : null}
+      {suspended ? (
+        <div className="notice danger">
+          <AlertTriangle size={18} aria-hidden="true" />
+          <div><strong>Suspended on {settings.suspendedAt!.slice(0, 10)}.</strong> <span className="small muted">Reason: {settings.suspendedReason || '—'}. They are signed out and cannot sign in.</span></div>
+        </div>
+      ) : null}
+
+      <section className="card profile-hero">
+        <span className="avatar lg" aria-hidden="true">{initials(d.user.name, d.user.email)}</span>
+        <div className="who">
+          <h1>{d.user.name || 'No name'}</h1>
+          <p className="muted" style={{ marginTop: 4 }}>{d.user.email}</p>
         </div>
         <div className="actions">
-          {suspended ? <span className="badge danger">Suspended</span> : trialActive ? <span className="badge accent">Trial</span> : null}
-          <span className={`badge ${plan === 'premium' ? 'accent' : ''}`}>{plan === 'premium' ? 'Premium' : 'Free'}</span>
+          {suspended ? <span className="badge danger">Suspended</span> : trialActive ? <span className="badge warn">Trial</span> : <span className="badge success">Active</span>}
+          <span className={`badge ${plan === 'premium' ? 'sun' : ''}`}>{plan === 'premium' ? 'Premium' : 'Free'}</span>
+          {d.isAdmin ? <span className="badge accent">Admin</span> : null}
         </div>
-      </div>
-
-      {error ? <section className="card card-body" style={{ marginBottom: 16, borderColor: 'var(--danger)' }}><strong>{error}</strong></section> : null}
-      {suspended ? (
-        <section className="card card-body" style={{ marginBottom: 16, borderColor: 'var(--danger)' }}>
-          <strong>Suspended on {settings.suspendedAt!.slice(0, 10)}.</strong> <span className="small muted">Reason: {settings.suspendedReason || '—'}. They are signed out and cannot sign in.</span>
-        </section>
-      ) : null}
+        <dl className="facts">
+          <div><dt>Joined</dt><dd className="num">{d.user.joinedAt.slice(0, 10)}</dd></div>
+          <div><dt>Plan ends</dt><dd className="num">{until || (plan === 'premium' ? 'No end date' : '—')}</dd></div>
+          <div><dt>Mode</dt><dd style={{ textTransform: 'capitalize' }}>{settings.mode ?? 'personal'}</dd></div>
+          <div><dt>Teams</dt><dd>{d.organisations.length}</dd></div>
+        </dl>
+      </section>
 
       <div className="layout-2">
         <div className="stack">
           <section className="card card-body">
-            <h2 style={{ marginBottom: 10 }}>Account</h2>
+            <h2 style={{ marginBottom: 6 }}>Account details</h2>
             <dl className="admin-dl">
               <dt>Joined</dt><dd>{d.user.joinedAt.slice(0, 10)}</dd>
               <dt>Email verified</dt><dd>{d.user.emailVerified ? 'Yes' : 'No'}</dd>
@@ -128,17 +140,7 @@ export default async function AdminUserPage({ params, searchParams }: { params: 
             </form>
           </section>
 
-          <section className="card card-body" style={{ borderColor: 'var(--danger)' }}>
-            <h2 style={{ marginBottom: 8, color: 'var(--danger)' }}>Delete account</h2>
-            <p className="small muted" style={{ marginBottom: 12 }}>Permanently deletes the account and all of its tasks, notes, spending, time and focus history. This cannot be undone. The audit log keeps a record of the deletion.</p>
-            {d.createsTeam ? <p className="small" style={{ color: 'var(--danger)', marginBottom: 12 }}>This person created a team. Hand it over or delete it first.</p> : null}
-            <form action={adminDeleteUser} className="stack" style={{ gap: 12 }}>
-              <input type="hidden" name="target" value={d.user.id} />
-              <label className="field">Type the account email to confirm<input className="input" name="confirmEmail" required autoComplete="off" placeholder={d.user.email} /></label>
-              <label className="field">Reason<input className="input" name="reason" required maxLength={300} /></label>
-              <button className="btn danger block" type="submit" disabled={d.createsTeam || d.isAdmin}>Delete account permanently</button>
-            </form>
-          </section>
+
 
           <section className="card card-body">
             <h2 style={{ marginBottom: 12 }}>Add a support note</h2>
@@ -148,6 +150,20 @@ export default async function AdminUserPage({ params, searchParams }: { params: 
               <button className="btn block" type="submit">Save note</button>
             </form>
           </section>
+
+          <details className="card danger-zone">
+            <summary>Delete account <ChevronDown size={18} aria-hidden="true" /></summary>
+            <div className="card-body">
+            <p className="small muted" style={{ marginBottom: 12 }}>Permanently deletes the account and all of its tasks, notes, spending, time and focus history. This cannot be undone. The audit log keeps a record of the deletion.</p>
+            {d.createsTeam ? <p className="small" style={{ color: 'var(--danger)', marginBottom: 12 }}>This person created a team. Hand it over or delete it first.</p> : null}
+            <form action={adminDeleteUser} className="stack" style={{ gap: 12 }}>
+              <input type="hidden" name="target" value={d.user.id} />
+              <label className="field">Type the account email to confirm<input className="input" name="confirmEmail" required autoComplete="off" placeholder={d.user.email} /></label>
+              <label className="field">Reason<input className="input" name="reason" required maxLength={300} /></label>
+              <button className="btn danger block" type="submit" disabled={d.createsTeam || d.isAdmin}>Delete account permanently</button>
+            </form>
+            </div>
+          </details>
         </div>
       </div>
     </>
