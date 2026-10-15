@@ -17,7 +17,7 @@ const ITEMS = [
 
 /** Side navigation on desktop, and a bottom bar with the same links on phones. */
 export function Sidebar({ showStudent, showWork, premium }: { name?: string; email?: string; showStudent: boolean; showWork: boolean; premium: boolean }) {
-  const PREMIUM_HREFS = ['/spend', '/organisation', '/student', '/work'];
+  const PREMIUM_HREFS = ['/focus', '/spend', '/organisation', '/student', '/work'];
   const pathname = usePathname();
   const withStudent = showStudent ? [...ITEMS.slice(0, 4), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(4)] : ITEMS;
   const items = showWork ? [...withStudent.slice(0, withStudent.findIndex(i => i.href === '/spend') + 1), { href: '/work', label: 'Work', icon: Briefcase }, ...withStudent.slice(withStudent.findIndex(i => i.href === '/spend') + 1)] : withStudent;

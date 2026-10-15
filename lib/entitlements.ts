@@ -15,4 +15,4 @@ export async function userHasPremium(c: PoolClient, userId: string): Promise<boo
 }
 
 /** Premium features Free users cannot use. Kept in one place for the sidebar and the server checks. */
-export const PREMIUM_AREAS = ['Spending', 'Student', 'Work', 'Team'] as const;
+export const PREMIUM_AREAS = ['Focus', 'Spending', 'Student', 'Work', 'Team'] as const;

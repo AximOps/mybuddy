@@ -305,6 +305,7 @@ export async function deleteActivity(formData: FormData) {
 /** Records a focus session that finished in the browser. */
 export async function recordFocusSession(formData: FormData) {
   const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const title = text(formData.get('title'), 60);
   const minutes = Number(formData.get('minutes'));
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 480) return;

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { withUser } from '@/lib/db';
 import { personalWorkspaceId } from '@/lib/planner';
 import { getCurrentUser } from '@/lib/session';
@@ -100,7 +101,11 @@ export default async function StatsPage() {
       <div className="stats">
         <div className="card stat"><div className="label">Streak</div><div className="value num">{data.streak} {data.streak === 1 ? 'day' : 'days'}</div><div className="small muted">Days at {STREAK_TARGET}% or more</div></div>
         <div className="card stat"><div className="label">7-day average</div><div className="value num">{weekAverage}%</div><div className="small muted">Routine completion</div></div>
-        <div className="card stat"><div className="label">Focus this week</div><div className="value num">{data.focus.minutes} min</div><div className="small muted">{data.focus.sessions} sessions</div></div>
+        {data.premium ? (
+          <div className="card stat"><div className="label">Focus this week</div><div className="value num">{data.focus.minutes} min</div><div className="small muted">{data.focus.sessions} sessions</div></div>
+        ) : (
+          <Link className="card stat stat-link" href="/settings#plan"><div className="label">Focus this week</div><div className="value">🔒</div><div className="small muted">Premium feature</div></Link>
+        )}
         <div className="card stat"><div className="label">Tasks done</div><div className="value num">{data.tasksDone}</div><div className="small muted">In the last 7 days</div></div>
       </div>
 

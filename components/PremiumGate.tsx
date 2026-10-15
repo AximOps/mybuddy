@@ -15,7 +15,7 @@ export async function PremiumGate({ feature, children }: { feature: string; chil
     <section className="card card-body" style={{ maxWidth: 560, margin: '40px auto', textAlign: 'center' }}>
       <div style={{ fontSize: 40 }} aria-hidden="true">🔒</div>
       <h1 style={{ margin: '10px 0 6px' }}>{feature} is a premium feature</h1>
-      <p className="muted" style={{ marginBottom: 16 }}>Upgrade to unlock it, for $10 a year.</p>
+      <p className="muted" style={{ marginBottom: 16 }}>Start your 15-day free trial or upgrade to unlock it, for $10 a year.</p>
       <Link className="btn primary" href="/settings#plan">See plans</Link>
     </section>
   );
