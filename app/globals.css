@@ -341,3 +341,13 @@ h1 { letter-spacing: -0.02em; }
 .routine-days { display: flex; gap: 4px; }
 .routine-days span { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 650; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); }
 .routine-days span.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+/* ---- Admin area ---- */
+.admin-shell .topbar { gap: 16px; }
+.admin-nav { display: flex; gap: 16px; flex: 1; }
+.admin-nav a { font-weight: 600; color: var(--muted); }
+.admin-nav a:hover { color: var(--ink); }
+.admin-dl { display: grid; grid-template-columns: 160px 1fr; gap: 10px 16px; margin: 0; }
+.admin-dl dt { color: var(--muted); font-size: 13px; }
+.admin-dl dd { margin: 0; font-weight: 550; }
+@media (max-width: 860px) { .admin-nav { gap: 10px; font-size: 13px; } .admin-dl { grid-template-columns: 1fr; } }
