@@ -24,6 +24,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <nav className="admin-nav">
           <Link href="/admin">Overview</Link>
           <Link href="/admin/users">Users</Link>
+          <Link href="/admin/teams">Teams</Link>
           <Link href="/today">Back to app</Link>
         </nav>
         <div className="topbar-right"><ProfileMenu name={user.name} email={user.email} /></div>

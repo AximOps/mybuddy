@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const user = await getCurrentUser();
   const { day: requested } = await searchParams;
-  const { routineName, events, dueTasks, today, day, student, routines, greeting, emoji } = await withUser(user!.id, async c => {
+  const { routineId, routineName, events, dueTasks, today, day, student, routines, greeting, emoji } = await withUser(user!.id, async c => {
     const { timezone } = await getSettings(c, user!.id);
     const todayKey = dateKeyIn(timezone);
     const dayKey = isDateKey(requested) ? requested : todayKey;
@@ -42,7 +42,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       <div className="page-head">
         <div>
           {day === today ? <Hero emoji={emoji} greeting={greeting} /> : <h1>{longDate(day)}</h1>}
-          <p>{routineName ? `Routine: ${routineName}` : 'No routine for this day'}</p>
+          <p>{routineName && routineId ? <>Routine: <Link className="routine-link" href={`/routines#routine-${routineId}`}>{routineName} ›</Link></> : 'No routine for this day'}</p>
         </div>
         <div className="actions">
           <Link className="btn" href={`/today?day=${shiftDateKey(day, -1)}`}>‹ Previous</Link>

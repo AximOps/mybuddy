@@ -39,7 +39,7 @@ export default async function RoutinesPage() {
 
       <div className="stack">
         {routines.map(r => (
-          <section key={r.id} className="card flush">
+          <section key={r.id} id={`routine-${r.id}`} className="card flush" style={{ scrollMarginTop: 80 }}>
             <div className="card-head">
               <form action={updateRoutine} style={{ display: 'flex', gap: 8, alignItems: 'center', flex: 1 }}>
                 <input type="hidden" name="id" value={r.id} />
