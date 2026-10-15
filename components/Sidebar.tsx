@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
-import { BuddyLogo } from './BuddyLogo';
+import { BrandLockup } from './BuddyLogo';
 
 const ITEMS = [
   { href: '/today', label: 'Today', icon: CalendarDays },
@@ -25,8 +25,7 @@ export function Sidebar({ showStudent, showWork }: { name?: string; email?: stri
     <>
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">🙂</span>
-          My Buddy
+          <BrandLockup size={38} />
         </div>
         <nav className="nav" aria-label="Main">
           {items.map(item => {

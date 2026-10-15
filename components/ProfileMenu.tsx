@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Settings } from 'lucide-react';
+import { Settings, ShieldCheck } from 'lucide-react';
 import { LogoutButton } from './LogoutButton';
 
 function initials(name: string, email: string) {
@@ -9,7 +9,7 @@ function initials(name: string, email: string) {
 }
 
 /** Profile button at the top right, with Settings and Log out. */
-export function ProfileMenu({ name, email }: { name: string; email: string }) {
+export function ProfileMenu({ name, email, showAdmin = false }: { name: string; email: string; showAdmin?: boolean }) {
   return (
     <details className="profile">
       <summary aria-label="Profile menu">
@@ -21,6 +21,11 @@ export function ProfileMenu({ name, email }: { name: string; email: string }) {
           <strong>{name || 'Signed in'}</strong>
           <span className="small muted">{email}</span>
         </div>
+        {showAdmin ? (
+          <Link href="/admin" className="profile-item">
+            <ShieldCheck size={16} strokeWidth={1.9} aria-hidden="true" /> Admin
+          </Link>
+        ) : null}
         <Link href="/settings" className="profile-item">
           <Settings size={16} strokeWidth={1.9} aria-hidden="true" /> Settings
         </Link>
