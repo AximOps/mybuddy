@@ -41,3 +41,47 @@ export async function adminAddNote(formData: FormData) {
   revalidatePath(`/admin/users/${target}`);
   redirect(`/admin/users/${target}`);
 }
+
+const ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+export async function adminGrantTrial(formData: FormData) {
+  const me = await requireAdminUser();
+  const target = String(formData.get('target') ?? '');
+  const days = Number(formData.get('days') ?? 15);
+  const note = String(formData.get('note') ?? '').trim().slice(0, 300);
+  if (!ID.test(target) || !Number.isInteger(days) || !note) return;
+  await withUser(me.id, async c => { await c.query(`select admin_grant_trial($1, $2, $3)`, [target, days, note]); });
+  revalidatePath(`/admin/users/${target}`);
+  redirect(`/admin/users/${target}`);
+}
+
+export async function adminSetSuspended(formData: FormData) {
+  const me = await requireAdminUser();
+  const target = String(formData.get('target') ?? '');
+  const suspend = formData.get('suspend') === 'true';
+  const reason = String(formData.get('reason') ?? '').trim().slice(0, 300);
+  if (!ID.test(target) || !reason) return;
+  await withUser(me.id, async c => { await c.query(`select admin_set_suspended($1, $2, $3)`, [target, suspend, reason]); });
+  revalidatePath(`/admin/users/${target}`);
+  revalidatePath('/admin/users');
+  redirect(`/admin/users/${target}`);
+}
+
+/** Deletes an account. The admin must type the account's email to confirm. */
+export async function adminDeleteUser(formData: FormData) {
+  const me = await requireAdminUser();
+  const target = String(formData.get('target') ?? '');
+  const confirmEmail = String(formData.get('confirmEmail') ?? '').trim().toLowerCase();
+  const reason = String(formData.get('reason') ?? '').trim().slice(0, 300);
+  if (!ID.test(target) || !reason) redirect(`/admin/users/${target}?error=${encodeURIComponent('Give a reason to delete the account.')}`);
+  const email = await withUser(me.id, async c => (await c.query<{ email: string }>(`select email from "user" where id = $1`, [target])).rows[0]?.email ?? '');
+  if (confirmEmail !== email.toLowerCase()) redirect(`/admin/users/${target}?error=${encodeURIComponent('The email did not match. Nothing was deleted.')}`);
+  try {
+    await withUser(me.id, async c => { await c.query(`select admin_delete_user($1, $2)`, [target, reason]); });
+  } catch (error) {
+    const message = error instanceof Error ? error.message.replace(/^error: /i, '') : 'The account could not be deleted.';
+    redirect(`/admin/users/${target}?error=${encodeURIComponent(message)}`);
+  }
+  revalidatePath('/admin/users');
+  redirect('/admin/users?deleted=1');
+}

@@ -18,6 +18,15 @@ export const auth = betterAuth({
     ...(apple ? { apple } : {}),
   },
   databaseHooks: {
+    session: {
+      create: {
+        // Refuse new sign-ins for suspended accounts.
+        before: async session => {
+          const { rows } = await pool.query<{ s: boolean }>(`select is_user_suspended($1) as s`, [session.userId]);
+          if (rows[0]?.s) return false;
+        },
+      },
+    },
     user: {
       create: {
         // Every new account gets a personal workspace, owned by that person.

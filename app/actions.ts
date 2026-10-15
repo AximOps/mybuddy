@@ -1100,3 +1100,14 @@ export async function decideTimesheet(formData: FormData) {
   });
   revalidatePath('/work');
 }
+
+/* ---------- Free trial ---------- */
+
+/** Starts the 15-day premium trial. Once per account, and only for people on the free plan. */
+export async function startFreeTrial() {
+  const user = await requireUser();
+  await withUser(user.id, async c => {
+    await c.query(`select start_free_trial($1)`, [user.id]);
+  });
+  revalidatePath('/settings');
+}

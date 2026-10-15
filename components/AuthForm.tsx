@@ -4,8 +4,8 @@ import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
-import { BrandLockup } from './BuddyLogo';
 import { FREE_FEATURES, PERIOD, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
+import { BrandLockup } from './BuddyLogo';
 
 type Mode = 'login' | 'signup';
 
@@ -25,7 +25,10 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
       ? await authClient.signUp.email({ name, email, password, callbackURL: '/today' })
       : await authClient.signIn.email({ email, password, callbackURL: '/today' });
     setBusy(false);
-    if (result.error) { setError(result.error.message ?? 'Something went wrong. Please try again.'); return; }
+    if (result.error) {
+      setError(result.error.message ?? 'Something went wrong. Please try again.');
+      return;
+    }
     router.push('/today');
   };
 
@@ -38,50 +41,57 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
   return (
     <div className="auth">
       <aside className="auth-brand">
+        <div className="auth-orb auth-orb-a" aria-hidden="true" />
+        <div className="auth-orb auth-orb-b" aria-hidden="true" />
         <BrandLockup size={64} large onDark />
 
         <div className="auth-hero">
+          <span className="eyebrow">Your daily companion</span>
           <h2>Plan your day, buddy.</h2>
           <p>Routines, tasks, notes and focus time in one place, on every device you sign in on.</p>
         </div>
 
-        <div className="feature-block">
-          <div className="feature-title">Free</div>
-          <ul className="feature-list">
-            {FREE_FEATURES.map(f => (
-              <li key={f.title}><span aria-hidden="true">{f.icon}</span><div><strong>{f.title}</strong><span>{f.detail}</span></div></li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="feature-block">
-          <div className="feature-title">Premium</div>
-          <ul className="feature-list">
-            {PREMIUM_FEATURES.map(f => (
-              <li key={f.title}><span aria-hidden="true">{f.icon}</span><div><strong>{f.title}</strong><span>{f.detail}</span></div></li>
-            ))}
-          </ul>
+        <div className="tiles">
+          <div className="tile-group-label">Free</div>
+          {FREE_FEATURES.map(f => (
+            <div key={f.title} className="tile">
+              <span className="tile-icon" aria-hidden="true">{f.icon}</span>
+              <div><strong>{f.title}</strong><span>{f.detail}</span></div>
+            </div>
+          ))}
+          <div className="tile-group-label">Premium</div>
+          {PREMIUM_FEATURES.map(f => (
+            <div key={f.title} className="tile premium">
+              <span className="tile-icon" aria-hidden="true">{f.icon}</span>
+              <div><strong>{f.title}</strong><span>{f.detail}</span></div>
+            </div>
+          ))}
         </div>
 
         <div className="pricing">
           <div className="price-card">
             <div className="price-name">Free</div>
             <div className="price-value">$0</div>
-            <div className="price-note">The daily planner, for everyone.</div>
+            <ul className="check-list">
+              <li>Daily routines and To-Do</li><li>Notes and focus timer</li><li>Stats and backups</li>
+            </ul>
           </div>
           <div className="price-card featured">
+            <div className="price-flag">15-day free trial</div>
             <div className="price-name">Premium</div>
             <div className="price-value">{PRICE}<span> {PERIOD}</span></div>
-            <div className="price-note">Spending, student, work and teams.</div>
+            <ul className="check-list">
+              <li>Spending and budgets</li><li>Student planner and GPA</li><li>Work, invoices and teams</li>
+            </ul>
           </div>
         </div>
       </aside>
 
-      <div className="auth-form">
+      <section className="auth-form">
         <div className="auth-card">
           <div>
-            <h1>{signup ? 'Create your account' : 'Log in'}</h1>
-            <p className="muted" style={{ marginTop: 6 }}>{signup ? 'Your personal workspace is created for you.' : 'Welcome back.'}</p>
+            <h1>{signup ? 'Create your account' : 'Welcome back'}</h1>
+            <p className="muted" style={{ marginTop: 6 }}>{signup ? 'Your personal workspace is created for you.' : 'Log in to pick up where you left off.'}</p>
           </div>
 
           <form onSubmit={submit} className="auth-stack">
@@ -97,21 +107,24 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
               <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8}
                 autoComplete={signup ? 'new-password' : 'current-password'} />
             </label>
-            <button className="btn primary block" type="submit" disabled={busy} style={{ height: 40 }}>
+            <button className="btn primary block auth-submit" type="submit" disabled={busy}>
               {busy ? 'Please wait…' : signup ? 'Create account' : 'Log in'}
             </button>
           </form>
 
-          {googleEnabled || appleEnabled ? <div className="divider">or</div> : null}
-          {googleEnabled ? <button type="button" className="btn block" style={{ height: 40 }} onClick={() => void social('google')}>Continue with Google</button> : null}
-          {appleEnabled ? <button type="button" className="btn block" style={{ height: 40 }} onClick={() => void social('apple')}>Continue with Apple</button> : null}
+          {googleEnabled || appleEnabled ? <div className="divider">or continue with</div> : null}
+          {googleEnabled ? <button type="button" className="btn block social" onClick={() => void social('google')}>Google</button> : null}
+          {appleEnabled ? <button type="button" className="btn block social" onClick={() => void social('apple')}>Apple</button> : null}
           {error ? <p className="error" role="alert">{error}</p> : null}
 
-          <p className="muted small">
-            {signup ? <>Already have an account? <Link href="/login">Log in</Link></> : <>New here? <Link href="/signup">Create an account</Link></>}
-          </p>
+          <div className="cta-divider" />
+          {signup ? (
+            <Link href="/login" className="btn cta">Already have an account? <strong>Log in</strong></Link>
+          ) : (
+            <Link href="/signup" className="btn cta">New here? <strong>Create an account</strong> <span aria-hidden="true">→</span></Link>
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

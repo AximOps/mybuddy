@@ -2,6 +2,7 @@ import { deleteCustomTag, resetAllData, resetTodayProgress, updateAppearance, up
 import { withUser } from '@/lib/db';
 import { CURRENCIES, getSettings } from '@/lib/settings';
 import { FREE_FEATURES, PERIOD, PREMIUM_ENABLED, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
+import { startFreeTrial } from '@/app/actions';
 import { customTags } from '@/lib/tags';
 import { getCurrentUser } from '@/lib/session';
 import { dateKeyIn } from '@/lib/time';
@@ -63,9 +64,19 @@ export default async function SettingsPage() {
           <div className="card-body stack" style={{ gap: 14 }}>
             <p className="small muted">{PREMIUM_ENABLED ? `Premium is ${PRICE} ${PERIOD}.` : 'Every feature is free while we test. Premium will be ' + PRICE + ' ' + PERIOD + ' once payments are connected.'}</p>
             <div className="actions" style={{ justifyContent: 'space-between' }}>
-              <div className="small muted">Included: {[...FREE_FEATURES, ...PREMIUM_FEATURES].map(f => f.title).join(', ')}</div>
-              <button type="button" className="btn primary" disabled>{settings.plan === 'premium' ? 'Premium active' : 'Upgrade (payments not connected yet)'}</button>
+              <div className="small muted">
+                {settings.trialActive ? `Free trial active until ${settings.planUntil!.slice(0, 10)}.`
+                  : settings.plan === 'premium' && settings.planUntil ? `Premium until ${settings.planUntil.slice(0, 10)}.`
+                  : settings.plan === 'premium' ? 'Premium active.'
+                  : settings.trialUsed ? 'Your free trial has been used.' : 'Try premium free for 15 days.'}
+              </div>
+              {settings.plan === 'free' && !settings.trialUsed ? (
+                <form action={startFreeTrial}><button type="submit" className="btn primary">Start 15-day free trial</button></form>
+              ) : (
+                <button type="button" className="btn primary" disabled>{settings.plan === 'premium' ? 'Premium' : 'Upgrade (payments not connected yet)'}</button>
+              )}
             </div>
+            <div className="small muted">Included: {[...FREE_FEATURES, ...PREMIUM_FEATURES].map(f => f.title).join(', ')}</div>
           </div>
         </section>
 

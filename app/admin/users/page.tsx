@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 const PAGE = 50;
 
-export default async function AdminUsers({ searchParams }: { searchParams: Promise<{ q?: string; plan?: string; page?: string }> }) {
+export default async function AdminUsers({ searchParams }: { searchParams: Promise<{ q?: string; plan?: string; page?: string; deleted?: string }> }) {
   const user = await getCurrentUser();
   const sp = await searchParams;
   const q = (sp.q ?? '').trim().slice(0, 100);
@@ -18,12 +18,14 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
     (await c.query<{
       user_id: string; user_name: string; user_email: string; joined_at: Date; plan: string; plan_until: Date | null;
       mode: string; last_active: Date | null; routines: number; tasks: number; notes: number; expenses: number; time_entries: number; organisations: number;
+      suspended: boolean; trial: boolean;
     }>(`select * from admin_list_users($1, $2, $3, $4)`, [q, plan, PAGE, (page - 1) * PAGE])).rows);
 
   const link = (p: number) => `/admin/users?${new URLSearchParams({ ...(q ? { q } : {}), ...(plan ? { plan } : {}), page: String(p) })}`;
 
   return (
     <>
+      {sp.deleted ? <section className="card card-body" style={{ marginBottom: 16, borderColor: 'var(--success)' }}>The account was deleted.</section> : null}
       <div className="page-head">
         <div><h1>Users</h1><p>Find an account, check its plan and activity, then support it.</p></div>
       </div>
@@ -39,13 +41,14 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
         {rows.length === 0 ? <div className="empty">No accounts match.</div> : (
           <table className="table">
             <thead>
-              <tr><th>Account</th><th>Joined</th><th>Plan</th><th>Mode</th><th>Last active</th><th className="num">Items</th><th className="action-col" aria-label="Open" /></tr>
+              <tr><th>Account</th><th>Joined</th><th>Status</th><th>Plan</th><th>Mode</th><th>Last active</th><th className="num">Items</th><th className="action-col" aria-label="Open" /></tr>
             </thead>
             <tbody>
               {rows.map(r => (
                 <tr key={r.user_id}>
                   <td><strong>{r.user_name || '—'}</strong><div className="small muted">{r.user_email}</div></td>
                   <td className="small">{dateKeyIn('Asia/Kolkata', new Date(r.joined_at))}</td>
+                  <td>{r.suspended ? <span className="badge danger">Suspended</span> : r.trial ? <span className="badge accent">Trial</span> : <span className="badge success">Active</span>}</td>
                   <td>
                     <span className={`badge ${r.plan === 'premium' ? 'accent' : ''}`}>{r.plan === 'premium' ? 'Premium' : 'Free'}</span>
                     {r.plan_until ? <div className="small muted">until {dateKeyIn('Asia/Kolkata', new Date(r.plan_until))}</div> : null}
