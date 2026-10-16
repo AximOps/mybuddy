@@ -645,9 +645,6 @@ textarea[rows] { min-height: 96px; }
   padding: 10px 20px; transition: background 0.12s ease;
 }
 .agenda-item:hover { background: var(--surface-2); }
-.agenda-item::before { content: ""; position: absolute; left: 100px; top: 0; bottom: 0; width: 2px; background: var(--line); }
-.agenda-wrap:first-child .agenda-item::before { top: 50%; }
-.agenda-wrap:last-child .agenda-item::before { bottom: 50%; }
 .agenda-time { font-size: 13px; font-weight: 650; color: var(--ink-2); line-height: 1.25; }
 .agenda-time span { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
 .agenda-mark { position: relative; z-index: 1; display: grid; place-items: center; }
@@ -712,7 +709,6 @@ a.mini-main:hover .title { color: var(--accent); }
 
 @media (max-width: 860px) {
   .agenda-item { grid-template-columns: 58px 28px minmax(0, 1fr) auto; gap: 10px; padding: 10px 14px; }
-  .agenda-item::before { left: 81px; }
   .now-line { padding-left: 14px; }
   .now-line::before, .now-line::after { left: 79px; }
   .now-line::before { right: 14px; }

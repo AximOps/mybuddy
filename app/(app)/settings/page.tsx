@@ -191,7 +191,7 @@ export default async function SettingsPage() {
               <button type="submit" className="btn">Reset today</button>
             </form>
             <form action={resetAllData} className="actions" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--line)', paddingTop: 14 }}>
-              <div><div style={{ fontWeight: 550, color: 'var(--danger)' }}>Reset all data</div><div className="small muted">Deletes your tasks, notes, spending and focus history, and restores the default routines. Type RESET to confirm.</div></div>
+              <div><div style={{ fontWeight: 550, color: 'var(--danger)' }}>Reset all data</div><div className="small muted">Deletes your routines, tasks, notes, spending and focus history. Type RESET to confirm.</div></div>
               <div className="actions">
                 <input className="input" name="confirm" placeholder="RESET" aria-label="Type RESET to confirm" style={{ width: 120 }} />
                 <button type="submit" className="btn danger">Reset all data</button>

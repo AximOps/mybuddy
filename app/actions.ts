@@ -65,11 +65,23 @@ export async function addEvent(formData: FormData) {
     const routine = await c.query<{ routine_id: string }>(
       `select routine_id from routine_days where workspace_id = $1 and weekday = $2 and deleted_at is null`,
       [ws, weekdayOf(day)]);
-    if (!routine.rows[0]) return;
+    let routineId = routine.rows[0]?.routine_id ?? null;
+    if (!routineId) {
+      // No routine covers this weekday yet (new accounts start empty): create "My routine"
+      // for every weekday that has none, so the first activity just works.
+      routineId = randomUUID();
+      await c.query(`insert into routines (id, workspace_id, name, color, sort_order, created_by) values ($1, $2, 'My routine', '#4B5BE8', 0, $3)`, [routineId, ws, user.id]);
+      await c.query(
+        `insert into routine_days (workspace_id, weekday, routine_id)
+         select $1, d, $2 from generate_series(0, 6) d
+          where not exists (select 1 from routine_days x where x.workspace_id = $1 and x.weekday = d and x.deleted_at is null)
+         on conflict (workspace_id, weekday) do update set routine_id = excluded.routine_id, deleted_at = null`,
+        [ws, routineId]);
+    }
     await c.query(
       `insert into events (id, workspace_id, routine_id, title, emoji, start_min, end_min, created_by)
        values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [randomUUID(), ws, routine.rows[0].routine_id, title, emoji, start, end, user.id]);
+      [randomUUID(), ws, routineId, title, emoji, start, end, user.id]);
   });
   revalidatePath('/today');
 }
@@ -729,7 +741,7 @@ export async function resetTodayProgress(formData: FormData) {
   revalidatePath('/stats');
 }
 
-/** Removes all routines, activities, tasks, notes, spending and focus history, then restores the defaults. */
+/** Removes all routines, activities, tasks, notes, spending and focus history so the account starts fresh. */
 export async function resetAllData(formData: FormData) {
   const user = await requireUser();
   if (formData.get('confirm') !== 'RESET') return;
@@ -744,7 +756,6 @@ export async function resetAllData(formData: FormData) {
     await c.query(`delete from routine_days where workspace_id = $1`, [ws]);
     await c.query(`delete from events where workspace_id = $1`, [ws]);
     await c.query(`delete from routines where workspace_id = $1`, [ws]);
-    await c.query(`select seed_default_routines($1, $2)`, [ws, user.id]);
   });
   revalidatePath('/', 'layout');
 }

@@ -111,7 +111,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           {isToday ? <Hero emoji={data.emoji} greeting={data.greeting} /> : <h1>{longDate(day)}</h1>}
           <p>
             {isToday ? `${longDate(day)} · ` : ''}
-            {data.routineName && data.routineId ? <>Routine: <Link className="routine-link" href={`/routines#routine-${data.routineId}`}>{data.routineName} ›</Link></> : 'No routine for this day'}
+            {data.routineName && data.routineId ? <>Routine: <Link className="routine-link" href={`/routines#routine-${data.routineId}`}>{data.routineName} ›</Link></> : <>No routine yet · <Link className="routine-link" href="/routines">Set up a routine ›</Link></>}
           </p>
         </div>
         <div className="actions">
@@ -168,7 +168,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             <span className="legend-chips small muted">{agenda.length} items</span>
           </div>
           {agenda.length === 0 ? (
-            <div className="empty">Nothing planned {dayLabel}. Add an activity, a task with a time, or a meeting.</div>
+            <div className="empty">Nothing planned {dayLabel} yet. Add your first activity below, or a to-do with a time on the right.</div>
           ) : (
             <ol className="agenda">
               {timed.map((a, i) => (
@@ -202,8 +202,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               ))}
             </ol>
           )}
-          <details className="panel agenda-add">
-            <summary><Plus size={15} aria-hidden="true" /> Add an activity to this routine</summary>
+          <details className="panel agenda-add" open={agenda.length === 0}>
+            <summary><Plus size={15} aria-hidden="true" /> {data.routineId ? 'Add an activity to this routine' : 'Add your first activity'}</summary>
             <form action={addEvent} className="form-grid">
               <input type="hidden" name="day" value={day} />
               <label className="field span-6">Title<input className="input" name="title" required maxLength={120} placeholder="e.g. Evening walk" /></label>
@@ -351,7 +351,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           <h2>Routines</h2>
           <Link href="/routines">Manage ›</Link>
         </div>
-        {data.routines.length === 0 ? <div className="empty">No routines yet.</div> : (
+        {data.routines.length === 0 ? <div className="empty">No routines yet. A routine is the plan for your weekdays, like “Workdays” or “Weekend”. <Link className="routine-link" href="/routines">Create your first routine ›</Link></div> : (
           <ul className="routine-list">
             {data.routines.map(r => (
               <li key={r.id} className="routine-row">
