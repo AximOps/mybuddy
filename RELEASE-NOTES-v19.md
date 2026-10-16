@@ -27,3 +27,11 @@
   and a **Copy app link** button.
 - It hides once the app is installed, after **Dismiss** (for 14 days), and on desktop browsers that
   cannot install the app.
+
+## Icon picker (added with v19)
+- Activities on Today and new activities in the routine editor show 50 icons to tap, grouped by use,
+  plus a box to type your own emoji. The old text box is replaced.
+
+## Navigation (added with v19)
+- **Week** moved out of the sidebar. It is a button in Today's header, next to Previous, Today and Next.
+- **Spending** sits directly after **Notes** in the sidebar. Student and Work follow it when they are on.

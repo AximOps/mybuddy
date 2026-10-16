@@ -1,3 +1,4 @@
+import { IconPicker } from '@/components/IconPicker';
 import { addActivity, copyRoutine, createRoutine, deleteActivity, deleteRoutine, setRoutineDay, updateActivity, updateRoutine } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listRoutines, personalWorkspaceId } from '@/lib/planner';
@@ -115,7 +116,7 @@ export default async function RoutinesPage() {
               <form action={addActivity} className="form-grid" style={{ padding: '0 18px 18px' }}>
                 <input type="hidden" name="routineId" value={r.id} />
                 <label className="field span-4">Activity<input className="input" name="title" required maxLength={120} /></label>
-                <label className="field span-1">Icon<input className="input" name="emoji" maxLength={8} placeholder="📌" /></label>
+                <div className="span-12"><IconPicker /></div>
                 <label className="field span-2">Starts<input className="input" type="time" name="start" required /></label>
                 <label className="field span-2">Ends<input className="input" type="time" name="end" required /></label>
                 <label className="field span-2">Category

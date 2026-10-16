@@ -2,13 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Lock, Sparkles, BarChart3, Briefcase, CalendarDays, CalendarRange, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
+import { Lock, Sparkles, BarChart3, Briefcase, CalendarDays, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
 import { BrandLockup } from './BuddyLogo';
 import { NavLink } from './NavLink';
 
 const ITEMS = [
   { href: '/today', label: 'Today', icon: CalendarDays },
-  { href: '/week', label: 'Week', icon: CalendarRange },
   { href: '/focus', label: 'Focus', icon: Timer },
   { href: '/tasks', label: 'To-Do', icon: ListChecks },
   { href: '/notes', label: 'Notes', icon: NotebookPen },
@@ -21,8 +20,13 @@ const ITEMS = [
 export function Sidebar({ showStudent, showWork, premium, trialUntil = null }: { name?: string; email?: string; showStudent: boolean; showWork: boolean; premium: boolean; trialUntil?: string | null }) {
   const PREMIUM_HREFS = ['/focus', '/spend', '/organisation', '/student', '/work'];
   const pathname = usePathname();
-  const withStudent = showStudent ? [...ITEMS.slice(0, 5), { href: '/student', label: 'Student', icon: GraduationCap }, ...ITEMS.slice(5)] : ITEMS;
-  const items = showWork ? [...withStudent.slice(0, withStudent.findIndex(i => i.href === '/spend') + 1), { href: '/work', label: 'Work', icon: Briefcase }, ...withStudent.slice(withStudent.findIndex(i => i.href === '/spend') + 1)] : withStudent;
+  // Spending sits right after Notes. Student and Work follow it, when they are on.
+  const spendAt = ITEMS.findIndex(i => i.href === '/spend') + 1;
+  const extras = [
+    ...(showStudent ? [{ href: '/student', label: 'Student', icon: GraduationCap }] : []),
+    ...(showWork ? [{ href: '/work', label: 'Work', icon: Briefcase }] : []),
+  ];
+  const items = [...ITEMS.slice(0, spendAt), ...extras, ...ITEMS.slice(spendAt)];
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   return (
     <>

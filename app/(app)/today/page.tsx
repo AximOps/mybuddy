@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { ArrowRight, Bell, Briefcase, Check, Lock, NotebookPen, Pin, Plus, Timer, Wallet } from 'lucide-react';
+import { ArrowRight, Bell, CalendarRange, Briefcase, Check, Lock, NotebookPen, Pin, Plus, Timer, Wallet } from 'lucide-react';
 import { addEvent, addTask, moveUnfinishedTasks, setTaskDone, stopTimer, toggleDayCheck, toggleDeadline, toggleEvent } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listRoutines, personalWorkspaceId } from '@/lib/planner';
 import { Hero } from '@/components/Hero';
 import { InstallNotice } from '@/components/InstallNotice';
+import { IconPicker } from '@/components/IconPicker';
 import { Elapsed } from '@/components/work/Elapsed';
 import { getCurrentUser } from '@/lib/session';
 import { fmtMinutes, dateKeyIn, isDateKey, longDate, shiftDateKey } from '@/lib/time';
@@ -120,6 +121,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           <Link className="btn" href={`/today?day=${shiftDateKey(day, -1)}`} aria-label="Previous day">‹ Previous</Link>
           {!isToday ? <Link className="btn" href="/today">Today</Link> : null}
           <Link className="btn" href={`/today?day=${shiftDateKey(day, 1)}`} aria-label="Next day">Next ›</Link>
+          <Link className="btn primary" href="/week"><CalendarRange size={15} strokeWidth={2} aria-hidden="true" /> Week</Link>
         </div>
       </div>
 
@@ -208,10 +210,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             <summary><Plus size={15} aria-hidden="true" /> {data.routineId ? 'Add an activity to this routine' : 'Add your first activity'}</summary>
             <form action={addEvent} className="form-grid">
               <input type="hidden" name="day" value={day} />
-              <label className="field span-6">Title<input className="input" name="title" required maxLength={120} placeholder="e.g. Evening walk" /></label>
-              <label className="field span-2">Icon<input className="input" name="emoji" maxLength={8} placeholder="📌" /></label>
-              <label className="field span-2">Starts<input className="input" name="start" type="time" required /></label>
-              <label className="field span-2">Ends<input className="input" name="end" type="time" required /></label>
+              <label className="field span-12">Title<input className="input" name="title" required maxLength={120} placeholder="e.g. Evening walk" /></label>
+              <div className="span-12"><IconPicker /></div>
+              <label className="field span-6">Starts<input className="input" name="start" type="time" required /></label>
+              <label className="field span-6">Ends<input className="input" name="end" type="time" required /></label>
               <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Add activity</button></div>
             </form>
           </details>
