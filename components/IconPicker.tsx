@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 /** Icons for activities, grouped by use. Each is a single emoji. */
@@ -24,40 +24,61 @@ const PANEL_HEIGHT = 320;
 export function IconPicker({ name = 'emoji', defaultValue = '📌', label = 'Icon' }: { name?: string; defaultValue?: string; label?: string }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, height: PANEL_HEIGHT });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const isCustom = !ICON_CHOICES.includes(value);
 
+  /** Puts the panel below the button, or above when there is more room there, and fits it on screen. */
+  const place = useCallback(() => {
+    const t = triggerRef.current;
+    if (!t) return false;
+    const r = t.getBoundingClientRect();
+    // On phones the bottom nav bar covers the end of the screen, so the panel stops above it.
+    const nav = document.querySelector('.mobile-nav')?.getBoundingClientRect();
+    const screenH = window.visualViewport?.height ?? window.innerHeight;
+    const vh = nav && nav.height > 0 && nav.top < screenH ? Math.min(screenH, nav.top) : screenH;
+    if (r.bottom < 0 || r.top > vh) return false; // the button scrolled out of view
+    const below = vh - r.bottom - 14, above = r.top - 14;
+    const down = below >= Math.min(PANEL_HEIGHT, 240) || below >= above;
+    const height = Math.max(160, Math.min(PANEL_HEIGHT, down ? below : above));
+    const left = Math.min(Math.max(8, r.left), window.innerWidth - PANEL_WIDTH - 8);
+    setPos({ top: down ? r.bottom + 6 : Math.max(8, r.top - height - 6), left: Math.max(8, left), height });
+    return true;
+  }, []);
+
   const toggle = () => {
-    if (!open && triggerRef.current) {
-      const r = triggerRef.current.getBoundingClientRect();
-      const fitsBelow = r.bottom + 6 + PANEL_HEIGHT < window.innerHeight;
-      const left = Math.min(Math.max(8, r.left), window.innerWidth - PANEL_WIDTH - 8);
-      setPos({ top: fitsBelow ? r.bottom + 6 : Math.max(8, r.top - PANEL_HEIGHT - 6), left });
-    }
+    if (!open) place();
     setOpen(o => !o);
   };
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (!panelRef.current?.contains(t) && !triggerRef.current?.contains(t)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    const close = () => setOpen(false);
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('scroll', close, true);
+    // Scrolling inside the panel is just browsing icons. Scrolling the page moves the panel with its button.
+    const onScroll = (e: Event) => {
+      if (panelRef.current && e.target instanceof Node && panelRef.current.contains(e.target)) return;
+      if (!place()) setOpen(false);
     };
-  }, [open]);
+    // Window size changes, including the phone keyboard opening for "type your own", only re-fit the panel.
+    const onResize = () => { place(); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, place]);
 
   const choose = (e: string) => { setValue(e); setOpen(false); };
 
@@ -80,7 +101,7 @@ export function IconPicker({ name = 'emoji', defaultValue = '📌', label = 'Ico
       </button>
 
       {open ? (
-        <div ref={panelRef} className="icon-panel" role="dialog" aria-label="Choose an icon" style={{ top: pos.top, left: pos.left, width: PANEL_WIDTH, maxHeight: PANEL_HEIGHT }}>
+        <div ref={panelRef} className="icon-panel" role="dialog" aria-label="Choose an icon" style={{ top: pos.top, left: pos.left, width: PANEL_WIDTH, maxHeight: pos.height }}>
           <div className="icon-grid" role="radiogroup" aria-label={label}>
             {ICON_CHOICES.map(e => (
               <button

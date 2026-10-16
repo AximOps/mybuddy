@@ -49,3 +49,13 @@ The current flow works with no Google setup. Automatic links can be added later.
 3. Press Send invite to your own second address. Check that the email has the link and that the invite adds to
    your calendar with a Join button.
 4. Change the time, save and press Send updated invite. The calendar event moves instead of being duplicated.
+
+## Fix (v27.1): icon picker scrolling
+- The icon picker under **Add an activity** (Today and Routines) closed as soon as you tried to scroll the icons,
+  with a mouse wheel and on phones. It closed on any scroll event, and that included scrolling inside the picker.
+- Now scrolling inside the picker scrolls the icons. Scrolling the page moves the picker with its button, and it
+  closes only when the button leaves the screen.
+- On phones, opening the keyboard for **Or type your own** no longer closes the picker.
+- The picker fits the space above or below its button, stops above the phone's bottom nav bar, and scrolling it
+  does not scroll the page behind it.
+- Changed: `components/IconPicker.tsx`, `app/globals.css`. No migration.

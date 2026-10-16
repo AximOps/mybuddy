@@ -941,7 +941,7 @@ a.mini-main:hover .title { color: var(--accent); }
 .icon-trigger-text { flex: 1; text-align: left; color: var(--muted); font-weight: 550; }
 .icon-trigger .chev { color: var(--muted); transition: transform 0.2s ease; }
 .icon-trigger .chev.open { transform: rotate(180deg); }
-.icon-panel { position: fixed; z-index: 300; overflow-y: auto; padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 44px rgba(20, 16, 60, 0.22); animation: icon-pop 0.14s ease-out; }
+.icon-panel { position: fixed; z-index: 300; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; max-width: calc(100vw - 16px); padding: 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 44px rgba(20, 16, 60, 0.22); animation: icon-pop 0.14s ease-out; }
 @keyframes icon-pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
 .icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .icon-btn { height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 20px; line-height: 1; cursor: pointer; transition: transform 0.1s ease, border-color 0.15s ease; }
