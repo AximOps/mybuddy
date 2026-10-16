@@ -39,16 +39,16 @@ export async function routineForDay(c: PoolClient, ws: string, userId: string, w
 }
 
 export interface PlannerTask {
-  id: string; title: string; dueDate: string | null; dueTime: number | null; tag: string; done: boolean;
+  id: string; title: string; dueDate: string | null; dueTime: number | null; tag: string; done: boolean; repeat: string;
 }
 
-export async function listTasks(c: PoolClient, ws: string): Promise<PlannerTask[]> {
-  const { rows } = await c.query<{ id: string; title: string; due_date: string | null; due_time: number | null; tag: string; done: boolean }>(
-    `select id, title, due_date::text as due_date, due_time, tag, done
-       from tasks where workspace_id = $1 and deleted_at is null
+export async function listTasks(c: PoolClient, ws: string, userId?: string): Promise<PlannerTask[]> {
+  const { rows } = await c.query<{ id: string; title: string; due_date: string | null; due_time: number | null; tag: string; done: boolean; repeat: string }>(
+    `select id, title, due_date::text as due_date, due_time, tag, done, repeat
+       from tasks where (workspace_id = $1 or ($2::text is not null and assignee_id = $2)) and deleted_at is null
       order by done asc, due_date asc nulls last, due_time asc nulls last, updated_at desc`,
-    [ws]);
-  return rows.map(r => ({ id: r.id, title: r.title, dueDate: r.due_date, dueTime: r.due_time, tag: r.tag, done: r.done }));
+    [ws, userId ?? null]);
+  return rows.map(r => ({ id: r.id, title: r.title, dueDate: r.due_date, dueTime: r.due_time, tag: r.tag, done: r.done, repeat: r.repeat }));
 }
 
 export interface PlannerNote {

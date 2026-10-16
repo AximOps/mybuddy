@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, Bell, Briefcase, Check, Lock, NotebookPen, Pin, Plus, Timer, Wallet } from 'lucide-react';
-import { addEvent, addTask, setTaskDone, stopTimer, toggleDeadline, toggleEvent } from '@/app/actions';
+import { addEvent, addTask, moveUnfinishedTasks, setTaskDone, stopTimer, toggleDeadline, toggleEvent } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listRoutines, personalWorkspaceId } from '@/lib/planner';
 import { Hero } from '@/components/Hero';
@@ -11,6 +11,8 @@ import { getSettings, money } from '@/lib/settings';
 import { isPremium } from '@/lib/entitlements';
 import { hmText } from '@/lib/work';
 import { loadToday, type AgendaItem, type TodayTask } from '@/lib/today';
+import { repeatLabel } from '@/lib/tasks';
+import { postDueBills } from '@/lib/spending';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,8 +47,10 @@ function TaskRow({ t }: { t: TodayTask }) {
           <span className="badge">{t.tag}</span>
           {t.overdue ? <span className="badge danger">Overdue · {t.dueDate}</span> : null}
           {t.dueTime !== null ? <span className="small muted">{fmtMinutes(t.dueTime)}</span> : null}
+          {t.repeat !== 'none' ? <span className="badge accent">↻ {repeatLabel(t.repeat)}</span> : null}
         </span>
       </div>
+      {!t.done ? <Link href={`/focus?task=${t.id}`} className="agenda-link" aria-label={`Focus on ${t.title}`} title="Focus on this"><Timer size={15} /></Link> : null}
     </li>
   );
 }
@@ -60,6 +64,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     const day = isDateKey(requested) ? requested : today;
     const ws = await personalWorkspaceId(c, user!.id);
     const premium = isPremium(settings);
+    if (premium) await postDueBills(c, user!.id, ws, today);
     const t = await loadToday(c, {
       ws, userId: user!.id, day, today, tz: settings.timezone, premium,
       student: settings.studentEnabled, workMode: settings.mode === 'work', budgetMinor: settings.monthlyBudgetMinor,
@@ -79,6 +84,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const nowIndex = nowMin === null ? -1 : timed.findIndex(a => (a.startMin ?? 0) > nowMin);
   const openTasks = tasks.overdue.length + tasks.today.filter(t => !t.done).length;
   const dayLabel = isToday ? 'today' : 'on this day';
+  // Daily review: from 6 PM on today, and on any past day.
+  const showReview = (isToday && (nowMin ?? 0) >= 18 * 60) || day < today;
+  const unfinished = tasks.overdue.length + tasks.today.filter(t => !t.done).length;
+  const missed = agenda.filter(a => a.kind === 'routine' && !a.done && (!isToday || (a.endMin ?? 0) <= (nowMin ?? 0)));
+  const moveTo = day < today ? today : shiftDateKey(day, 1);
 
   return (
     <>
@@ -153,7 +163,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                     <div className="agenda-mark">{a.toggle ? <ToggleForm item={a} day={day} /> : <span className="agenda-icon" aria-hidden="true">{a.emoji}</span>}</div>
                     <div className="agenda-main">
                       <span className="title">{a.kind === 'routine' || a.kind === 'task' || a.kind === 'deadline' ? `${a.emoji} ` : ''}{a.title}</span>
-                      <span className="agenda-meta"><span className={`kind-chip kind-${a.kind}`}>{KIND_LABEL[a.kind]}</span><span className="small muted">{a.meta}</span></span>
+                      <span className="agenda-meta"><span className={`kind-chip kind-${a.kind}`}>{KIND_LABEL[a.kind]}</span><span className="small muted">{a.meta}</span>{a.streak && a.streak >= 2 ? <span className="streak-chip" title={`${a.streak} scheduled days in a row`}>🔥 {a.streak}</span> : null}</span>
                     </div>
                     {a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}
                   </div>
@@ -190,6 +200,26 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </section>
 
         <div className="stack">
+          {showReview ? (
+            <section className="card review">
+              <div className="card-head"><h2>{isToday ? 'How did today go?' : 'Day in review'}</h2><span className="badge accent">{percent}% routine</span></div>
+              <div className="card-body stack" style={{ gap: 12 }}>
+                <div className="kv-grid">
+                  <div><span className="small muted">Activities done</span><strong className="num">{data.routineDone}/{data.routineTotal}</strong></div>
+                  <div><span className="small muted">Tasks done</span><strong className="num">{tasks.doneToday}</strong></div>
+                  <div><span className="small muted">Focus</span><strong className="num">{premium ? hmText(focus.minutes) : '—'}</strong></div>
+                  <div><span className="small muted">Still open</span><strong className="num">{unfinished}</strong></div>
+                </div>
+                {missed.length ? <p className="small muted">Missed: {missed.slice(0, 4).map(m => m.title).join(', ')}{missed.length > 4 ? ` and ${missed.length - 4} more` : ''}.</p> : <p className="small muted">Every activity that has ended is done. 🎉</p>}
+                {unfinished ? (
+                  <form action={moveUnfinishedTasks}>
+                    <input type="hidden" name="from" value={day} /><input type="hidden" name="to" value={moveTo} />
+                    <button className="btn primary block" type="submit">Move {unfinished} unfinished {unfinished === 1 ? 'task' : 'tasks'} to {moveTo === today ? 'today' : 'tomorrow'}</button>
+                  </form>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
           {next ? (
             <section className="card next-up card-body">
               <div className="small">{isToday && nowMin !== null && next.startMin! <= nowMin ? 'Happening now' : 'Next up'} · {fmtMinutes(next.startMin!)}{next.kind !== 'routine' ? ` · ${KIND_LABEL[next.kind]}` : ''}</div>

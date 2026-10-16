@@ -1,6 +1,6 @@
 import { PremiumGate } from '@/components/PremiumGate';
 import Link from 'next/link';
-import { addClient, addMeeting, addMeetingAction, addProject, addTimeEntry, actionToTask, createInvoice, deleteClient, deleteMeeting, deleteMeetingAction, deleteProject, deleteTimeEntry, startTimer, stopTimer, toggleMeetingAction, updateMeeting } from '@/app/actions';
+import { addClient, addMeeting, addMeetingAction, addProject, addTimeEntry, actionToTask, createInvoice, emailMeetingNotes, deleteClient, deleteMeeting, deleteMeetingAction, deleteProject, deleteTimeEntry, startTimer, stopTimer, toggleMeetingAction, updateMeeting } from '@/app/actions';
 import { Elapsed } from '@/components/work/Elapsed';
 import { withUser } from '@/lib/db';
 import { getCurrentUser } from '@/lib/session';
@@ -58,6 +58,8 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
       `select id, title, meeting_on::text as meeting_on, start_min, end_min, attendees, agenda, notes from meetings where id = $1 and workspace_id = $2 and deleted_at is null`, [selectedId, ws])).rows[0] ?? null : null;
     const actions = meeting ? (await c.query<{ id: string; text: string; done: boolean }>(
       `select id, text, done from meeting_actions where meeting_id = $1 order by sort_order`, [meeting.id])).rows : [];
+    const members = (await c.query<{ id: string; name: string; email: string }>(
+      `select u.id, u.name, u.email from workspace_members m join "user" u on u.id = m.user_id where m.workspace_id = $1 order by u.name`, [ws])).rows;
 
     // Reports (date range and client)
     const from = isDateKey(sp.from ?? '') ? sp.from! : `${today.slice(0, 8)}01`;
@@ -79,7 +81,8 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                   and e.spent_on >= t.week_start and e.spent_on < t.week_start + 7) as minutes
          from timesheets t join "user" u on u.id = t.user_id
         where t.workspace_id = $1 and t.status = 'submitted' order by t.submitted_at`, [ws])).rows : [];
-    return { settings, today, timer, clients, projects, weekDays, monday, sunday, entries, meetings, meeting, actions, from, to, clientFilter, lines, people, invoices, wsList, ws, activeKind, isAdmin, timesheet, approvals };
+    return {
+      members, settings, today, timer, clients, projects, weekDays, monday, sunday, entries, meetings, meeting, actions, from, to, clientFilter, lines, people, invoices, wsList, ws, activeKind, isAdmin, timesheet, approvals };
   });
 
   const cur = data.settings.currency;
@@ -305,7 +308,19 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                       <form action={toggleMeetingAction}><input type="hidden" name="id" value={a.id} />
                         <button type="submit" className={`check ${a.done ? 'on' : ''}`} aria-label={a.done ? 'Reopen' : 'Complete'}>{a.done ? '✓' : ''}</button></form>
                       <span style={{ flex: 1, textDecoration: a.done ? 'line-through' : 'none' }}>{a.text}</span>
-                      <form action={actionToTask}><input type="hidden" name="id" value={a.id} /><button className="btn ghost sm" type="submit">To To-Do</button></form>
+                      <details className="assign">
+                        <summary className="btn ghost sm">To To-Do</summary>
+                        <form action={actionToTask} className="assign-pop">
+                          <input type="hidden" name="id" value={a.id} />
+                          <label className="field">For
+                            <select className="select" name="assignee" defaultValue={user!.id}>
+                              {data.members.length ? data.members.map(mb => <option key={mb.id} value={mb.id}>{mb.id === user!.id ? 'Me' : mb.name || mb.email}</option>) : <option value={user!.id}>Me</option>}
+                            </select>
+                          </label>
+                          <label className="field">Due (optional)<input className="input" type="date" name="dueDate" /></label>
+                          <button className="btn primary sm" type="submit">Add to-do</button>
+                        </form>
+                      </details>
                       <form action={deleteMeetingAction}><input type="hidden" name="id" value={a.id} /><button className="btn ghost sm danger" type="submit">Remove</button></form>
                     </div>
                   ))}
@@ -313,6 +328,21 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                     <input type="hidden" name="meetingId" value={data.meeting.id} />
                     <input className="input" name="text" required maxLength={200} placeholder="Add an action item" style={{ flex: 1 }} />
                     <button className="btn" type="submit">Add</button>
+                  </form>
+                </div>
+                <div className="mail-box">
+                  <h2 style={{ marginBottom: 6 }}>Email the notes</h2>
+                  {sp.mail === 'sent' ? <div className="notice success" role="status">Sent to {sp.n} {sp.n === '1' ? 'person' : 'people'}.</div>
+                    : sp.mail === 'off' ? <div className="notice danger" role="alert">Email is not set up for this site yet (RESEND_API_KEY and MAIL_FROM).</div>
+                    : sp.mail === 'partial' ? <div className="notice danger" role="alert">Some emails could not be sent. {sp.n} went out.</div>
+                    : sp.mail === 'none' ? <div className="notice danger" role="alert">Add at least one email address.</div> : null}
+                  <form action={emailMeetingNotes} className="stack" style={{ gap: 10 }}>
+                    <input type="hidden" name="id" value={data.meeting.id} />
+                    <label className="field">To (email addresses, separated by commas)
+                      <input className="input" name="to" defaultValue={[...(data.meeting.attendees.match(/[^\s,;<>"]+@[^\s,;<>"]+\.[^\s,;<>"]+/g) ?? []), ...data.members.filter(mb => mb.id !== user!.id && data.meeting!.attendees.toLowerCase().includes((mb.name || '~').split(' ')[0].toLowerCase())).map(mb => mb.email)].filter((v, i, arr) => arr.indexOf(v) === i).join(', ')} placeholder="ben@company.com, cara@company.com" />
+                    </label>
+                    <label className="check-row"><input type="checkbox" name="copyMe" defaultChecked /> Send me a copy</label>
+                    <button className="btn" type="submit">Send agenda, notes and action items</button>
                   </form>
                 </div>
                 <form action={deleteMeeting} style={{ marginTop: 18 }}>

@@ -13,7 +13,8 @@ import { activeWorkspaceId, weekStartOf, WORKSPACE_COOKIE } from '@/lib/workspac
 import { parseMoney, zonedToUtc } from '@/lib/time';
 import { cookies } from 'next/headers';
 import { getCurrentUser } from '@/lib/session';
-import { isDateKey, isUuid, parseHM, weekdayOf } from '@/lib/time';
+import { dateKeyIn, isDateKey, isUuid, parseHM, shiftDateKey, weekdayOf } from '@/lib/time';
+import { isRepeat, setTaskDoneIn } from '@/lib/tasks';
 
 async function requireUser() {
   const user = await getCurrentUser();
@@ -79,16 +80,20 @@ export async function addTask(formData: FormData) {
   const user = await requireUser();
   const title = text(formData.get('title'), 120);
   const dueRaw = String(formData.get('dueDate') ?? '');
-  const dueDate = isDateKey(dueRaw) ? dueRaw : null;
-  const dueTime = dueDate ? parseHM(formData.get('dueTime')) : null;
+  const repeatRaw = String(formData.get('repeat') ?? 'none');
+  const repeat = isRepeat(repeatRaw) ? repeatRaw : 'none';
   if (!title) return;
 
   await withUser(user.id, async c => {
+    const { timezone } = await getSettings(c, user.id);
+    // A repeating task needs a first date; without one it starts today.
+    const dueDate = isDateKey(dueRaw) ? dueRaw : repeat !== 'none' ? dateKeyIn(timezone) : null;
+    const dueTime = dueDate ? parseHM(formData.get('dueTime')) : null;
     const ws = await personalWorkspaceId(c, user.id);
     const tag = await resolveTag(c, user.id, 'task', text(formData.get('tag'), 20), text(formData.get('newTag'), 20), 'Personal');
     await c.query(
-      `insert into tasks (id, workspace_id, title, due_date, due_time, tag, created_by) values ($1, $2, $3, $4, $5, $6, $7)`,
-      [randomUUID(), ws, title, dueDate, dueTime, tag, user.id]);
+      `insert into tasks (id, workspace_id, title, due_date, due_time, tag, repeat, created_by) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [randomUUID(), ws, title, dueDate, dueTime, tag, repeat, user.id]);
   });
   revalidatePath('/tasks');
   revalidatePath('/today');
@@ -100,12 +105,12 @@ export async function setTaskDone(formData: FormData) {
   const done = formData.get('done') === 'true';
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
-    await c.query(
-      `update tasks set done = $2, completed_at = case when $2 then now() else null end where id = $1`,
-      [id, done]);
+    const { timezone } = await getSettings(c, user.id);
+    await setTaskDoneIn(c, id, done, dateKeyIn(timezone));
   });
   revalidatePath('/tasks');
   revalidatePath('/today');
+  revalidatePath('/week');
 }
 
 export async function deleteTask(formData: FormData) {
@@ -116,6 +121,73 @@ export async function deleteTask(formData: FormData) {
     await c.query(`update tasks set deleted_at = now() where id = $1`, [id]);
   });
   revalidatePath('/tasks');
+}
+
+/** Daily review: moves every unfinished task due on or before `from` to `to`. */
+export async function moveUnfinishedTasks(formData: FormData) {
+  const user = await requireUser();
+  const from = String(formData.get('from') ?? '');
+  const to = String(formData.get('to') ?? '');
+  if (!isDateKey(from) || !isDateKey(to) || to <= from) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(
+      `update tasks set due_date = $3 where workspace_id = $1 and deleted_at is null and not done and due_date is not null and due_date <= $2`,
+      [ws, from, to]);
+  });
+  revalidatePath('/today');
+  revalidatePath('/tasks');
+  revalidatePath('/week');
+}
+
+/* ---------- Week view ---------- */
+
+/**
+ * Moves a to-do or a meeting to another day and time (drag and drop on the week view).
+ * startMin null means "any time that day". A meeting keeps its length.
+ */
+export async function rescheduleItem(kind: 'task' | 'meeting', id: string, day: string, startMin: number | null): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  if (!isUuid(id) || !isDateKey(day) || (startMin !== null && (!Number.isInteger(startMin) || startMin < 0 || startMin > 1439))) return { ok: false };
+  if (kind === 'meeting' && !(await withUser(user.id, async c => userHasPremium(c, user.id)))) return { ok: false };
+  const ok = await withUser(user.id, async c => {
+    if (kind === 'task') {
+      const r = await c.query(`update tasks set due_date = $2, due_time = $3 where id = $1 and deleted_at is null`, [id, day, startMin]);
+      return r.rowCount === 1;
+    }
+    const m = (await c.query<{ start_min: number | null; end_min: number | null }>(`select start_min, end_min from meetings where id = $1 and deleted_at is null`, [id])).rows[0];
+    if (!m) return false;
+    const length = m.start_min !== null && m.end_min !== null ? m.end_min - m.start_min : 60;
+    const end = startMin === null ? null : Math.min(1439, startMin + length);
+    const r = await c.query(`update meetings set meeting_on = $2, start_min = $3, end_min = $4, updated_at = now() where id = $1`, [id, day, startMin, end]);
+    return r.rowCount === 1;
+  });
+  revalidatePath('/week');
+  revalidatePath('/today');
+  revalidatePath('/tasks');
+  revalidatePath('/work');
+  return { ok };
+}
+
+/* ---------- Calendar feed ---------- */
+
+/** Creates (or replaces) the secret token in the private calendar URL. Replacing it breaks the old link. */
+export async function resetCalendarFeed() {
+  const user = await requireUser();
+  const { randomBytes } = await import('node:crypto');
+  const token = randomBytes(24).toString('base64url');
+  await withUser(user.id, async c => {
+    await c.query(
+      `insert into user_settings (user_id, calendar_token) values ($1, $2)
+       on conflict (user_id) do update set calendar_token = excluded.calendar_token, updated_at = now()`, [user.id, token]);
+  });
+  revalidatePath('/settings');
+}
+
+export async function disableCalendarFeed() {
+  const user = await requireUser();
+  await withUser(user.id, async c => { await c.query(`update user_settings set calendar_token = null, updated_at = now() where user_id = $1`, [user.id]); });
+  revalidatePath('/settings');
 }
 
 /* ---------- Notes ---------- */
@@ -308,14 +380,23 @@ export async function recordFocusSession(formData: FormData) {
   if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const title = text(formData.get('title'), 60);
   const minutes = Number(formData.get('minutes'));
+  const taskId = String(formData.get('taskId') ?? '');
+  const completeTask = formData.get('completeTask') === 'true';
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 480) return;
   await withUser(user.id, async c => {
     const ws = await workspaceFor(c, user.id);
+    const linked = isUuid(taskId) ? taskId : null;
     await c.query(
-      `insert into focus_sessions (id, workspace_id, user_id, title, minutes) values ($1, $2, $3, $4, $5)`,
-      [randomUUID(), ws, user.id, title, minutes]);
+      `insert into focus_sessions (id, workspace_id, user_id, title, minutes, task_id) values ($1, $2, $3, $4, $5, $6)`,
+      [randomUUID(), ws, user.id, title, minutes, linked]);
+    if (linked && completeTask) {
+      const { timezone } = await getSettings(c, user.id);
+      await setTaskDoneIn(c, linked, true, dateKeyIn(timezone));
+    }
   });
   revalidatePath('/stats');
+  revalidatePath('/today');
+  revalidatePath('/tasks');
 }
 
 /* ---------- Settings ---------- */
@@ -438,6 +519,84 @@ export async function setMonthlyBudget(formData: FormData) {
       [user.id, minor]);
   });
   revalidatePath('/spend');
+}
+
+/* ---------- Spending: bills, category budgets, CSV import ---------- */
+
+export async function addBill(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const name = text(formData.get('name'), 80);
+  const amount = parseMoney(formData.get('amount'));
+  const dayOfMonth = Number(formData.get('dayOfMonth'));
+  const category = text(formData.get('category'), 20) || 'bills';
+  if (!name || amount === null || !Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 28) return;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    const { timezone } = await getSettings(c, user.id);
+    const today = dateKeyIn(timezone);
+    // A bill added after its day this month starts next month, so nothing is posted by surprise.
+    const startsNextMonth = dayOfMonth < Number(today.slice(8, 10));
+    await c.query(
+      `insert into recurring_expenses (id, workspace_id, user_id, name, amount_minor, category, day_of_month, last_posted_month)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [randomUUID(), ws, user.id, name, amount, category, dayOfMonth, startsNextMonth ? today.slice(0, 7) : null]);
+  });
+  revalidatePath('/spend');
+}
+
+export async function deleteBill(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => { await c.query(`update recurring_expenses set deleted_at = now() where id = $1`, [id]); });
+  revalidatePath('/spend');
+}
+
+export async function setCategoryBudget(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const category = text(formData.get('category'), 20);
+  const raw = String(formData.get('amount') ?? '').trim();
+  const minor = raw === '' ? null : parseMoney(raw);
+  if (!category || (raw !== '' && minor === null)) return;
+  await withUser(user.id, async c => {
+    if (minor === null) await c.query(`delete from category_budgets where user_id = $1 and category = $2`, [user.id, category]);
+    else await c.query(
+      `insert into category_budgets (user_id, category, amount_minor) values ($1, $2, $3)
+       on conflict (user_id, category) do update set amount_minor = excluded.amount_minor, updated_at = now()`, [user.id, category, minor]);
+  });
+  revalidatePath('/spend');
+}
+
+/** Imports money going out from a bank statement CSV. Rows already imported are skipped. */
+export async function importBankCsv(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const file = formData.get('file');
+  if (!(file instanceof File) || file.size === 0) redirect('/spend?import=empty');
+  if (file.size > 2_000_000) redirect('/spend?import=big');
+  const { parseBankCsv } = await import('@/lib/spending');
+  const parsed = parseBankCsv(await file.text());
+  if (parsed.error) redirect(`/spend?import=error&msg=${encodeURIComponent(parsed.error)}`);
+  let added = 0, dupes = 0;
+  await withUser(user.id, async c => {
+    const ws = await personalWorkspaceId(c, user.id);
+    const existing = new Set((await c.query<{ source_ref: string }>(
+      `select source_ref from expenses where user_id = $1 and source_ref = any($2) and deleted_at is null`, [user.id, parsed.rows.map(r => r.ref)])).rows.map(r => r.source_ref));
+    for (const r of parsed.rows.slice(0, 2000)) {
+      if (existing.has(r.ref)) { dupes++; continue; }
+      existing.add(r.ref);
+      await c.query(
+        `insert into expenses (id, workspace_id, user_id, spent_on, amount_minor, category, note, source, source_ref)
+         values ($1, $2, $3, $4, $5, $6, $7, 'csv', $8)`,
+        [randomUUID(), ws, user.id, r.day, r.amountMinor, r.category, r.note, r.ref]);
+      added++;
+    }
+  });
+  revalidatePath('/spend');
+  revalidatePath('/stats');
+  redirect(`/spend?import=done&added=${added}&dupes=${dupes}&skipped=${parsed.skipped}`);
 }
 
 /* ---------- Settings: preferences ---------- */
@@ -907,20 +1066,65 @@ export async function toggleMeetingAction(formData: FormData) {
 }
 
 /** Copies an action item into the To-Do list, tagged Work. */
+/** Turns a meeting action item into a to-do: for yourself (personal list) or for a teammate in the team workspace. */
 export async function actionToTask(formData: FormData) {
   const user = await requireUser();
   if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const id = String(formData.get('id') ?? '');
+  const assignee = String(formData.get('assignee') ?? '');
+  const dueRaw = String(formData.get('dueDate') ?? '');
+  const dueDate = isDateKey(dueRaw) ? dueRaw : null;
   if (!isUuid(id)) return;
   await withUser(user.id, async c => {
     const ws = await activeWorkspaceId(c, user.id);
+    const forOther = assignee && assignee !== user.id
+      ? (await c.query(`select 1 from workspace_members where workspace_id = $1 and user_id = $2`, [ws, assignee])).rowCount === 1
+      : false;
+    const target = forOther ? ws : await personalWorkspaceId(c, user.id);
     await c.query(
-      `insert into tasks (id, workspace_id, title, tag, created_by)
-       select gen_random_uuid(), $2, a.text, 'Work', $3 from meeting_actions a where a.id = $1`,
-      [id, ws, user.id]);
+      `insert into tasks (id, workspace_id, title, tag, due_date, assignee_id, created_by)
+       select gen_random_uuid(), $2, a.text, 'Work', $4, $5, $3 from meeting_actions a where a.id = $1`,
+      [id, target, user.id, dueDate, forOther ? assignee : null]);
   });
   revalidatePath('/tasks');
   revalidatePath('/today');
+  revalidatePath('/work');
+}
+
+/** Emails the meeting's agenda, notes and action items to the addresses given. */
+export async function emailMeetingNotes(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  const raw = String(formData.get('to') ?? '');
+  const to = [...new Set((raw.match(/[^\s,;<>"]+@[^\s,;<>"]+\.[^\s,;<>"]+/g) ?? []).map(e => e.toLowerCase()))].slice(0, 25);
+  if (formData.get('copyMe') === 'on' && !to.includes(user.email.toLowerCase())) to.push(user.email.toLowerCase());
+  const back = `/work?tab=meetings&meeting=${id}`;
+  if (!to.length) redirect(`${back}&mail=none`);
+  const m = await withUser(user.id, async c => {
+    const meeting = (await c.query<{ title: string; meeting_on: string; start_min: number | null; end_min: number | null; attendees: string; agenda: string; notes: string }>(
+      `select title, meeting_on::text as meeting_on, start_min, end_min, attendees, agenda, notes from meetings where id = $1 and deleted_at is null`, [id])).rows[0];
+    const actions = (await c.query<{ text: string; done: boolean }>(`select text, done from meeting_actions where meeting_id = $1 order by sort_order`, [id])).rows;
+    return meeting ? { ...meeting, actions } : null;
+  });
+  if (!m) return;
+  const { fmtMinutes } = await import('@/lib/time');
+  const when = `${m.meeting_on}${m.start_min !== null ? ` · ${fmtMinutes(m.start_min)}${m.end_min !== null ? `–${fmtMinutes(m.end_min)}` : ''}` : ''}`;
+  const body = [
+    m.title, when, m.attendees ? `Attendees: ${m.attendees}` : '', '',
+    m.agenda ? `AGENDA\n${m.agenda}\n` : '',
+    m.notes ? `NOTES\n${m.notes}\n` : '',
+    m.actions.length ? `ACTION ITEMS\n${m.actions.map(a => `${a.done ? '[x]' : '[ ]'} ${a.text}`).join('\n')}\n` : '',
+    `Sent by ${user.name || user.email} from My Buddy.`,
+  ].filter((l, i, arr) => l !== '' || arr[i - 1] !== '').join('\n');
+  const { sendMail } = await import('@/lib/mail');
+  let sent = 0, failed = false, off = false;
+  for (const addr of to) {
+    const r = await sendMail(addr, `Meeting notes: ${m.title} (${m.meeting_on})`, body);
+    if (r.sent) sent++; else if (r.error) failed = true; else off = true;
+  }
+  redirect(`${back}&mail=${off && !sent ? 'off' : failed ? 'partial' : 'sent'}&n=${sent}`);
 }
 
 export async function deleteMeetingAction(formData: FormData) {

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { withUser } from '@/lib/db';
 import { personalWorkspaceId } from '@/lib/planner';
+import { activityStreaks } from '@/lib/streaks';
 import { getCurrentUser } from '@/lib/session';
 import { getSettings, money } from '@/lib/settings';
 import { isPremium } from '@/lib/entitlements';
@@ -79,7 +80,10 @@ export default async function StatsPage() {
     const noteTags = await c.query<{ tag: string; n: number }>(
       `select tag, count(*)::int as n from notes where workspace_id = $1 and deleted_at is null group by tag order by n desc`, [ws]);
 
+    const habits = [...(await activityStreaks(c, ws, user!.id, today)).values()]
+      .filter(h => h.best > 0).sort((a, b) => b.streak - a.streak || b.best - a.best).slice(0, 6);
     return {
+      habits,
       week, streak, currency: settings.currency, premium: isPremium(settings),
       focus: focus.rows[0], tasksDone: tasks.rows[0].n, routines: routines.rows[0].n,
       spend: spend.rows, todo: todo.rows[0], notes: notes.rows[0], noteTags: noteTags.rows,
@@ -120,6 +124,21 @@ export default async function StatsPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="card flush" style={{ marginBottom: 20 }}>
+        <div className="card-head"><h2>Habit streaks</h2><span className="small muted">Scheduled days in a row</span></div>
+        {data.habits.length === 0 ? <div className="empty">Tick off routine activities on Today to start a streak.</div> : (
+          <ul className="mini-list">
+            {data.habits.map(h => (
+              <li key={h.eventId} className="mini-row">
+                <span style={{ fontSize: 18 }} aria-hidden="true">{h.emoji}</span>
+                <span className="mini-main"><span className="title">{h.title}</span><span className="small muted">Best {h.best} {h.best === 1 ? 'day' : 'days'}</span></span>
+                <span className={`streak-chip ${h.streak ? '' : 'off'}`}>{h.streak ? `🔥 ${h.streak}` : 'No streak'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <div className="layout-2" style={{ marginBottom: 20 }}>

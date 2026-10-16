@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-type Session = { title: string; minutes: number; endAt: number | null; remainingSec: number | null };
+type Session = { title: string; minutes: number; endAt: number | null; remainingSec: number | null; taskId?: string | null; completeTask?: boolean };
 const KEY = 'mybuddy.focus.v1';
 const PRESETS = [15, 25, 45, 60, 90];
 const clock = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
@@ -12,10 +12,11 @@ const clock = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}
  * page refresh. A finished session is recorded to the account through the record() server action.
  * Stopping early discards the session and records nothing.
  */
-export function FocusTimer({ record }: { record: (formData: FormData) => Promise<void> }) {
+export function FocusTimer({ record, task = null }: { record: (formData: FormData) => Promise<void>; task?: { id: string; title: string } | null }) {
   const [session, setSession] = useState<Session | null>(null);
   const [now, setNow] = useState(0);
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(task?.title ?? '');
+  const [completeTask, setCompleteTask] = useState(true);
   const [minutes, setMinutes] = useState(25);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -48,9 +49,10 @@ export function FocusTimer({ record }: { record: (formData: FormData) => Promise
     const fd = new FormData();
     fd.set('title', session.title);
     fd.set('minutes', String(session.minutes));
+    if (session.taskId) { fd.set('taskId', session.taskId); fd.set('completeTask', String(!!session.completeTask)); }
     void record(fd);
     save(null);
-    setMessage(`Focus complete: ${session.minutes} minutes${session.title ? ` on ${session.title}` : ''}. Well done.`);
+    setMessage(`Focus complete: ${session.minutes} minutes${session.title ? ` on ${session.title}` : ''}.${session.taskId && session.completeTask ? ' The task is ticked off.' : ''} Well done.`);
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('Focus complete', { body: session.title || 'Time for a break.' });
     }
@@ -63,7 +65,7 @@ export function FocusTimer({ record }: { record: (formData: FormData) => Promise
 
   const start = () => {
     setMessage(null);
-    save({ title: title.trim(), minutes, endAt: Date.now() + minutes * 60000, remainingSec: null });
+    save({ title: title.trim(), minutes, endAt: Date.now() + minutes * 60000, remainingSec: null, taskId: task?.id ?? null, completeTask: task ? completeTask : false });
   };
   const pause = () => session && save({ ...session, endAt: null, remainingSec: remaining });
   const resume = () => session && save({ ...session, endAt: Date.now() + (session.remainingSec ?? 0) * 1000, remainingSec: null });
@@ -86,6 +88,12 @@ export function FocusTimer({ record }: { record: (formData: FormData) => Promise
             ))}
           </div>
         </div>
+        {task ? (
+          <label className="check-row" style={{ marginBottom: 16 }}>
+            <input type="checkbox" checked={completeTask} onChange={e => setCompleteTask(e.target.checked)} />
+            Tick off “{task.title}” when the session finishes
+          </label>
+        ) : null}
         <button type="button" className="btn primary block" style={{ height: 46 }} onClick={start}>Start {minutes}-minute focus</button>
         {message ? <p className="small" role="status" style={{ marginTop: 14, color: 'var(--success)' }}>{message}</p> : null}
         <p className="small muted" style={{ marginTop: 14 }}>The timer keeps running if you refresh this page. Finished sessions count in Stats.</p>

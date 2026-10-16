@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { BrandLockup } from '@/components/BuddyLogo';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { Sidebar } from '@/components/Sidebar';
+import { Notifier } from '@/components/Notifier';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { withUser } from '@/lib/db';
 import { isPlatformAdmin } from '@/lib/admin';
@@ -31,6 +32,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <div className="content">{children}</div>
+        <Notifier />
       </div>
     </div>
   );

@@ -1,3 +1,7 @@
+import { headers } from 'next/headers';
+import { CopyField } from '@/components/CopyField';
+import { NotificationSettings } from '@/components/Notifier';
+import { disableCalendarFeed, resetCalendarFeed } from '@/app/actions';
 import { deleteCustomTag, resetAllData, resetTodayProgress, updateAppearance, updateMode, updateProfile, updateSettings, updateStudentTools } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { CURRENCIES, getSettings } from '@/lib/settings';
@@ -16,9 +20,12 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   const data = await withUser(user!.id, async c => {
     const settings = await getSettings(c, user!.id);
-    return { settings, tags: await customTags(c, user!.id, 'task'), notes: await customTags(c, user!.id, 'note'), spend: await customTags(c, user!.id, 'spend'), today: dateKeyIn(settings.timezone) };
+    return { calendarToken: (await c.query<{ t: string | null }>(`select calendar_token as t from user_settings where user_id = $1`, [user!.id])).rows[0]?.t ?? null, settings, tags: await customTags(c, user!.id, 'task'), notes: await customTags(c, user!.id, 'note'), spend: await customTags(c, user!.id, 'spend'), today: dateKeyIn(settings.timezone) };
   });
   const { settings } = data;
+  const h = await headers();
+  const origin = process.env.BETTER_AUTH_URL ?? `${h.get('x-forwarded-proto') ?? 'https'}://${h.get('host')}`;
+  const feed = data.calendarToken ? `${origin}/api/calendar/${data.calendarToken}.ics` : null;
   const zones = TIMEZONES.includes(settings.timezone) ? TIMEZONES : [settings.timezone, ...TIMEZONES];
 
   const section = (title: string, children: React.ReactNode) => (
@@ -99,6 +106,30 @@ export default async function SettingsPage() {
             ))}
           </form>
         ))}
+
+        {section('Reminders', (
+          <div className="card-body"><NotificationSettings /></div>
+        ))}
+
+        <section className="card flush" id="calendar">
+          <div className="card-head"><h2>Calendar sync</h2>{feed ? <span className="badge success">On</span> : null}</div>
+          <div className="card-body stack" style={{ gap: 12 }}>
+            <p className="small muted">Subscribe from Google Calendar, Apple Calendar or Outlook to see your to-dos with dates, meetings, classes, deadlines and note reminders there. Calendars refresh it every few hours.</p>
+            {feed ? (
+              <>
+                <CopyField value={feed} label="Calendar link" />
+                <CopyField value={`${feed}?routines=1`} label="Calendar link with routines" />
+                <p className="small muted">The second link also adds your routine activities as repeating events. In Google Calendar choose Other calendars → From URL. On iPhone or Mac, open Settings → Calendar → Accounts → Add subscribed calendar. Anyone with the link can read it, so keep it private.</p>
+                <div className="actions">
+                  <form action={resetCalendarFeed}><button className="btn sm" type="submit">Make a new link</button></form>
+                  <form action={disableCalendarFeed}><button className="btn sm ghost danger" type="submit">Turn off</button></form>
+                </div>
+              </>
+            ) : (
+              <form action={resetCalendarFeed}><button className="btn primary" type="submit">Create my calendar link</button></form>
+            )}
+          </div>
+        </section>
 
         {section('Time and money', (
           <form action={updateSettings} className="form-grid card-body">

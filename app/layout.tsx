@@ -1,12 +1,20 @@
 import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
+import type { Metadata } from 'next';
+import { RegisterSW } from '@/components/RegisterSW';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 import { displayFont } from '@/lib/fonts';
 export { viewport } from './page-viewport';
 
 // The page title comes from metadata below. Do not add a <title> tag in <head>, it would override this.
-export const metadata = { title: 'My Buddy', description: 'Plan your day, buddy.' };
+export const metadata: Metadata = {
+  title: 'My Buddy',
+  description: 'Plan your day, buddy.',
+  applicationName: 'My Buddy',
+  appleWebApp: { capable: true, title: 'My Buddy', statusBarStyle: 'default' },
+  icons: { icon: '/icons/icon-192.png', apple: '/icons/apple-touch-icon.png' },
+};
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const saved = (await cookies()).get('theme')?.value;
@@ -15,6 +23,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang="en" data-theme={theme} className={displayFont.variable}>
       <body>
         {children}
+        <RegisterSW />
         <SpeedInsights />
       </body>
     </html>

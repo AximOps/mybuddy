@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { routineForDay } from './planner';
 import { weekdayOf } from './time';
+import { activityStreaks } from './streaks';
 
 /** One row in the Today timeline. Items without a time are listed under "Anytime". */
 export type AgendaKind = 'routine' | 'meeting' | 'class' | 'task' | 'deadline' | 'reminder' | 'focus';
@@ -14,11 +15,13 @@ export interface AgendaItem {
   meta: string;
   done: boolean;
   href?: string;
+  /** Scheduled days in a row this routine activity was done. */
+  streak?: number;
   /** What the check box toggles, when the item can be ticked off from Today. */
   toggle?: { action: 'event' | 'task' | 'deadline'; id: string };
 }
 
-export interface TodayTask { id: string; title: string; tag: string; dueDate: string | null; dueTime: number | null; done: boolean; overdue: boolean }
+export interface TodayTask { id: string; title: string; tag: string; dueDate: string | null; dueTime: number | null; done: boolean; overdue: boolean; repeat: string }
 
 export interface TodayData {
   routineId: string | null;
@@ -53,13 +56,14 @@ export async function loadToday(c: PoolClient, o: {
 
   // Routine activities
   const routine = await routineForDay(c, ws, userId, weekdayOf(day), day);
+  const streaks = routine.events.length ? await activityStreaks(c, ws, userId, day, routine.events.map(e => e.id)) : new Map();
   for (const e of routine.events) {
-    agenda.push({ key: `e${e.id}`, kind: 'routine', startMin: e.startMin, endMin: e.endMin, title: e.title, emoji: e.emoji, meta: e.category, done: e.done, toggle: { action: 'event', id: e.id } });
+    agenda.push({ key: `e${e.id}`, kind: 'routine', startMin: e.startMin, endMin: e.endMin, title: e.title, emoji: e.emoji, meta: e.category, done: e.done, streak: streaks.get(e.id)?.streak ?? 0, toggle: { action: 'event', id: e.id } });
   }
 
   // Tasks: overdue (only when looking at today), due on the day, done on the day, and a few without a date.
-  const taskRows = (await c.query<{ id: string; title: string; tag: string; due_date: string | null; due_time: number | null; done: boolean; done_on: string | null }>(
-    `select id, title, tag, due_date::text as due_date, due_time, done,
+  const taskRows = (await c.query<{ id: string; title: string; tag: string; due_date: string | null; due_time: number | null; done: boolean; done_on: string | null; repeat: string }>(
+    `select id, title, tag, due_date::text as due_date, due_time, done, repeat,
             case when completed_at is null then null else (completed_at at time zone $3)::date::text end as done_on
        from tasks
       where (workspace_id = $1 or assignee_id = $4) and deleted_at is null
@@ -70,7 +74,7 @@ export async function loadToday(c: PoolClient, o: {
       order by done, due_date nulls last, due_time nulls last, updated_at desc
       limit 80`,
     [ws, day, tz, userId, isToday])).rows;
-  const toTask = (r: typeof taskRows[number]): TodayTask => ({ id: r.id, title: r.title, tag: r.tag, dueDate: r.due_date, dueTime: r.due_time, done: r.done, overdue: !r.done && !!r.due_date && r.due_date < day });
+  const toTask = (r: typeof taskRows[number]): TodayTask => ({ id: r.id, title: r.title, tag: r.tag, dueDate: r.due_date, dueTime: r.due_time, done: r.done, overdue: !r.done && !!r.due_date && r.due_date < day, repeat: r.repeat });
   const overdue = taskRows.filter(r => !r.done && r.due_date && r.due_date < day).map(toTask);
   const dueToday = taskRows.filter(r => r.due_date === day && (!r.done || r.done_on === day)).map(toTask);
   const anytime = taskRows.filter(r => !r.done && !r.due_date).slice(0, 5).map(toTask);

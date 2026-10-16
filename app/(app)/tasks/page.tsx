@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { Repeat as RepeatIcon, Timer } from 'lucide-react';
+import { REPEATS, repeatLabel } from '@/lib/tasks';
 import { addTask, clearCompletedTasks, deleteTask, setTaskDone } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listTasks, personalWorkspaceId } from '@/lib/planner';
@@ -18,7 +20,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const status: Status = requested === 'done' || requested === 'all' ? requested : 'open';
   const { tasks, today, tags } = await withUser(user!.id, async c => {
     const { timezone } = await getSettings(c, user!.id);
-    return { tasks: await listTasks(c, await personalWorkspaceId(c, user!.id)), today: dateKeyIn(timezone), tags: await tagOptions(c, user!.id, 'task') };
+    return { tasks: await listTasks(c, await personalWorkspaceId(c, user!.id), user!.id), today: dateKeyIn(timezone), tags: await tagOptions(c, user!.id, 'task') };
   });
 
   const open = tasks.filter(t => !t.done);
@@ -53,6 +55,12 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
             </select>
           </label>
           <label className="field span-2">New tag (optional)<input className="input" name="newTag" maxLength={20} placeholder="e.g. Errands" /></label>
+          <label className="field span-4">Repeat
+            <select className="select" name="repeat" defaultValue="none">
+              {REPEATS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </label>
+          <p className="span-8 small muted" style={{ alignSelf: 'center' }}>A repeating task comes back on its next date when you tick it off. Without a date it starts today.</p>
           <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn primary" type="submit">Add task</button>
           </div>
@@ -78,7 +86,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         ) : (
           <table className="table task-table">
             <thead>
-              <tr><th className="check-col" aria-label="Done" /><th>Task</th><th>Tag</th><th>Due</th><th className="action-col" aria-label="Actions" /></tr>
+              <tr><th className="check-col" aria-label="Done" /><th>Task</th><th>Tag</th><th>Due</th><th className="action-col" style={{ width: 150 }} aria-label="Actions" /></tr>
             </thead>
             <tbody>
               {shown.map(t => {
@@ -94,7 +102,10 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                         </button>
                       </form>
                     </td>
-                    <td><span className="title">{t.title}</span></td>
+                    <td>
+                      <span className="title">{t.title}</span>
+                      {t.repeat !== 'none' ? <span className="badge accent" style={{ marginLeft: 8 }}><RepeatIcon size={11} aria-hidden="true" /> {repeatLabel(t.repeat)}</span> : null}
+                    </td>
                     <td><span className="badge">{t.tag}</span></td>
                     <td>
                       {t.dueDate ? (
@@ -104,7 +115,8 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
                       ) : <span className="muted small">No date</span>}
                     </td>
                     <td className="action-col">
-                      <form action={deleteTask}>
+                      {!t.done ? <Link className="btn ghost sm" href={`/focus?task=${t.id}`} aria-label={`Focus on ${t.title}`} title="Focus on this"><Timer size={15} /></Link> : null}
+                      <form action={deleteTask} style={{ display: 'inline-block' }}>
                         <input type="hidden" name="id" value={t.id} />
                         <button type="submit" className="btn ghost sm danger" aria-label={`Delete ${t.title}`}>Delete</button>
                       </form>
