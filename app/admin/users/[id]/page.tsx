@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { AlertTriangle, ChevronDown, ChevronLeft } from 'lucide-react';
 import { initials } from '@/lib/initials';
+import { formatPhone } from '@/lib/phone';
 import { notFound } from 'next/navigation';
 import { adminAddNote, adminDeleteUser, adminGrantTrial, adminSetPlan, adminSetSuspended } from '@/app/admin/actions';
 import { withUser } from '@/lib/db';
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 type Detail = {
   user: { id: string; name: string; email: string; emailVerified: boolean; joinedAt: string } | null;
-  settings: { plan?: string; planUntil?: string | null; mode?: string; timezone?: string; currency?: string; studentEnabled?: boolean; suspendedAt?: string | null; suspendedReason?: string; trialStartedAt?: string | null; trialUsed?: boolean };
+  settings: { plan?: string; planUntil?: string | null; mode?: string; timezone?: string; currency?: string; studentEnabled?: boolean; suspendedAt?: string | null; suspendedReason?: string; trialStartedAt?: string | null; trialUsed?: boolean; phone?: string | null };
   isAdmin: boolean;
   createsTeam: boolean;
   signInMethods: string[];
@@ -69,6 +70,7 @@ export default async function AdminUserPage({ params, searchParams }: { params: 
             <h2 style={{ marginBottom: 6 }}>Account details</h2>
             <dl className="admin-dl">
               <dt>Joined</dt><dd>{d.user.joinedAt.slice(0, 10)}</dd>
+              <dt>Mobile number</dt><dd>{formatPhone(settings.phone ?? null) || 'Not added'}</dd>
               <dt>Email verified</dt><dd>{d.user.emailVerified ? 'Yes' : 'No'}</dd>
               <dt>Sign-in methods</dt><dd>{d.signInMethods.map(m => m === 'credential' ? 'Email and password' : m).join(', ') || '—'}</dd>
               <dt>Mode</dt><dd>{settings.mode ?? 'personal'}</dd>

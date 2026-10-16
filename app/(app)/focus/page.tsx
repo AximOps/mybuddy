@@ -1,4 +1,3 @@
-import { recordFocusSession } from '@/app/actions';
 import { FocusTimer } from '@/components/FocusTimer';
 import { PremiumGate } from '@/components/PremiumGate';
 import { withUser } from '@/lib/db';
@@ -19,7 +18,7 @@ async function FocusPageContent({ taskId }: { taskId: string | null }) {
           <p>{task ? <>Focusing on a task from your to-do list.</> : 'Work in one block of time without interruptions. Finished sessions appear in Stats and on Today.'}</p>
         </div>
       </div>
-      <FocusTimer record={recordFocusSession} task={task} />
+      <FocusTimer task={task} />
     </>
   );
 }

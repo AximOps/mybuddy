@@ -3,7 +3,8 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { Check, Eye, EyeOff, LockKeyhole, Mail, Smartphone, UserRound } from 'lucide-react';
+import { COUNTRY_CODES, normalizePhone } from '@/lib/phone';
 import { authClient } from '@/lib/auth-client';
 import { FREE_FEATURES, PERIOD, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
 import { BrandLockup } from './BuddyLogo';
@@ -76,7 +77,7 @@ function Plans({ signup }: { signup: boolean }) {
           {FREE_FEATURES.map(f => <li key={f.title} title={f.detail}><span aria-hidden="true">{f.icon}</span>{f.title}</li>)}
         </ul>
         {signup ? (
-          <p className="plan-note">Every new account starts on Free.</p>
+          <p className="plan-note">After your trial you can stay on Free, no card needed.</p>
         ) : (
           <Link href="/signup" className="plan-cta plan-cta-ghost">Sign up free</Link>
         )}
@@ -93,9 +94,9 @@ function Plans({ signup }: { signup: boolean }) {
           {PREMIUM_FEATURES.map(f => <li key={f.title} title={f.detail}><span aria-hidden="true">{f.icon}</span>{f.title}</li>)}
         </ul>
         {signup ? (
-          <p className="plan-note">Start your trial from Settings after you sign up.</p>
+          <p className="plan-note">Included free for 15 days with every new account.</p>
         ) : (
-          <Link href="/signup" className="plan-cta">Start free trial</Link>
+          <Link href="/signup" className="plan-cta">Start 15-day free trial</Link>
         )}
       </section>
     </div>
@@ -105,6 +106,8 @@ function Plans({ signup }: { signup: boolean }) {
 export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; googleEnabled: boolean; appleEnabled: boolean }) {
   const router = useRouter();
   const [name, setName] = useState('');
+  const [country, setCountry] = useState('91');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -114,6 +117,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (signup && !normalizePhone(country, phone)) { setError('Enter a valid mobile number. Indian numbers have 10 digits and start with 6, 7, 8 or 9.'); return; }
     setBusy(true); setError(null);
     const result = signup
       ? await authClient.signUp.email({ name, email, password, callbackURL: '/today' })
@@ -123,7 +127,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
       setError(result.error.message ?? 'Something went wrong. Please try again.');
       return;
     }
-    router.push('/today');
+    router.push(signup ? `/welcome?phone=${encodeURIComponent(phone)}&country=${country}` : '/today');
   };
 
   const social = async (provider: 'google' | 'apple') => {
@@ -152,7 +156,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
         <div className="auth-card">
           <div className="auth-card-head">
             <h1>{signup ? 'Create your account' : 'Welcome back'}</h1>
-            <p className="muted">{signup ? 'Your personal workspace is ready in seconds.' : 'Log in to pick up where you left off.'}</p>
+            <p className="muted">{signup ? 'Includes 15 days of Premium, free. No card needed.' : 'Log in to pick up where you left off.'}</p>
           </div>
 
           {googleEnabled || appleEnabled ? (
@@ -173,6 +177,20 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
                   <input className="input" value={name} onChange={e => setName(e.target.value)} required autoComplete="name" placeholder="Your name" />
                 </span>
               </label>
+            ) : null}
+            {signup ? (
+              <div className="field">
+                <label htmlFor="auth-phone">Mobile number</label>
+                <span className="phone-row">
+                  <select className="select" value={country} onChange={e => setCountry(e.target.value)} aria-label="Country code">
+                    {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
+                  </select>
+                  <span className="input-wrap">
+                    <Smartphone size={17} aria-hidden="true" />
+                    <input id="auth-phone" className="input" type="tel" inputMode="tel" value={phone} onChange={e => setPhone(e.target.value)} required autoComplete="tel-national" placeholder="98765 43210" />
+                  </span>
+                </span>
+              </div>
             ) : null}
             <label className="field">Email
               <span className="input-wrap">

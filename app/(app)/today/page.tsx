@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, Bell, Briefcase, Check, Lock, NotebookPen, Pin, Plus, Timer, Wallet } from 'lucide-react';
-import { addEvent, addTask, moveUnfinishedTasks, setTaskDone, stopTimer, toggleDeadline, toggleEvent } from '@/app/actions';
+import { addEvent, addTask, moveUnfinishedTasks, setTaskDone, stopTimer, toggleDayCheck, toggleDeadline, toggleEvent } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listRoutines, personalWorkspaceId } from '@/lib/planner';
 import { Hero } from '@/components/Hero';
@@ -22,14 +22,24 @@ const KIND_LABEL: Record<AgendaItem['kind'], string> = {
 
 function ToggleForm({ item, day }: { item: AgendaItem; day: string }) {
   const t = item.toggle!;
-  const action = t.action === 'event' ? toggleEvent : t.action === 'task' ? setTaskDone : toggleDeadline;
+  const action = t.action === 'event' ? toggleEvent : t.action === 'task' ? setTaskDone : t.action === 'check' ? toggleDayCheck : toggleDeadline;
   return (
     <form action={action}>
       {t.action === 'event' ? (<><input type="hidden" name="eventId" value={t.id} /><input type="hidden" name="day" value={day} /></>)
-        : (<><input type="hidden" name="id" value={t.id} /><input type="hidden" name="done" value={item.done ? 'false' : 'true'} /></>)}
+        : (<><input type="hidden" name="id" value={t.id} /><input type="hidden" name="done" value={item.done ? 'false' : 'true'} />
+          {t.action === 'check' ? <><input type="hidden" name="kind" value={t.kind} /><input type="hidden" name="day" value={day} /></> : null}</>)}
       <button type="submit" className={`check ${item.done ? 'on' : ''}`} aria-label={item.done ? `Undo ${item.title}` : `Mark ${item.title} done`}>
         {item.done ? <Check size={14} strokeWidth={3} /> : null}
       </button>
+    </form>
+  );
+}
+
+function CheckForm({ kind, id, day, done, title }: { kind: 'note' | 'reminder'; id: string; day: string; done: boolean; title: string }) {
+  return (
+    <form action={toggleDayCheck}>
+      <input type="hidden" name="kind" value={kind} /><input type="hidden" name="id" value={id} /><input type="hidden" name="day" value={day} /><input type="hidden" name="done" value={done ? 'false' : 'true'} />
+      <button type="submit" className={`check ${done ? 'on' : ''}`} aria-label={done ? `Undo ${title}` : `Mark ${title} done for today`}>{done ? <Check size={14} strokeWidth={3} /> : null}</button>
     </form>
   );
 }
@@ -55,9 +65,9 @@ function TaskRow({ t }: { t: TodayTask }) {
   );
 }
 
-export default async function TodayPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
+export default async function TodayPage({ searchParams }: { searchParams: Promise<{ day?: string; welcome?: string }> }) {
   const user = await getCurrentUser();
-  const { day: requested } = await searchParams;
+  const { day: requested, welcome } = await searchParams;
   const data = await withUser(user!.id, async c => {
     const settings = await getSettings(c, user!.id);
     const today = dateKeyIn(settings.timezone);
@@ -107,6 +117,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
+      {welcome === 'trial' ? <div className="notice success welcome-note" role="status"><span>🎉</span><div><strong>Your 15-day Premium trial has started.</strong> Every feature is unlocked: try Focus, Week and Spending from the menu.</div></div>
+        : welcome === 'no_trial' ? <div className="notice welcome-note" role="status"><span>👋</span><div><strong>You&apos;re all set.</strong> This mobile number already had a free trial, so this account starts on Free. You can upgrade from Settings any time.</div></div> : null}
       <div className="stats">
         <div className="card stat">
           <div className="label">Routine</div>
@@ -291,12 +303,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             ) : (
               <ul className="mini-list">
                 {notes.reminders.map(r => (
-                  <li key={`r${r.id}`} className="mini-row"><Bell size={15} aria-hidden="true" className="mini-ico warn" />
-                    <Link href={`/notes?id=${r.id}`} className="mini-main"><span className="title">{r.title}</span><span className="small muted">Reminder at {fmtMinutes(r.atMin)}</span></Link></li>
+                  <li key={`r${r.id}`} className={`mini-row ${r.done ? 'done' : ''}`}><CheckForm kind="reminder" id={r.id} day={day} done={r.done} title={r.title} />
+                    <Link href={`/notes?id=${r.id}`} className="mini-main"><span className="title">{r.title}</span><span className="small muted"><Bell size={12} aria-hidden="true" className="mini-ico warn" /> Reminder at {fmtMinutes(r.atMin)}</span></Link></li>
                 ))}
                 {notes.pinned.map(n => (
-                  <li key={`p${n.id}`} className="mini-row"><Pin size={15} aria-hidden="true" className="mini-ico" />
-                    <Link href={`/notes?id=${n.id}`} className="mini-main"><span className="title">{n.title}</span>{n.snippet ? <span className="small muted clamp-1">{n.snippet}</span> : null}</Link></li>
+                  <li key={`p${n.id}`} className={`mini-row ${n.done ? 'done' : ''}`}><CheckForm kind="note" id={n.id} day={day} done={n.done} title={n.title} />
+                    <Link href={`/notes?id=${n.id}`} className="mini-main"><span className="title"><Pin size={12} aria-hidden="true" className="mini-ico" /> {n.title}</span>{n.snippet ? <span className="small muted clamp-1">{n.snippet}</span> : null}</Link></li>
                 ))}
               </ul>
             )}

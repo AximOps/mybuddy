@@ -4,6 +4,9 @@ import { BrandLockup } from '@/components/BuddyLogo';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { Sidebar } from '@/components/Sidebar';
 import { Notifier } from '@/components/Notifier';
+import { TrialBanner } from '@/components/TrialBanner';
+import { FocusProvider } from '@/components/focus/FocusProvider';
+import { FocusBall } from '@/components/focus/FocusBall';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { withUser } from '@/lib/db';
 import { isPlatformAdmin } from '@/lib/admin';
@@ -16,10 +19,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   const { settings, admin } = await withUser(user.id, async c => ({ settings: await getSettings(c, user.id), admin: await isPlatformAdmin(c, user.id) }));
+  if (!settings.onboarded) redirect('/welcome');
+  // Subscribe reminders: from day 10 of the trial (5 days left), and for a week after it ends.
+  const untilMs = settings.planUntil ? Date.parse(settings.planUntil) : null;
+  const daysLeft = untilMs ? Math.ceil((untilMs - Date.now()) / 86_400_000) : 0;
+  const trialBanner = settings.trialActive && daysLeft <= 5 ? { kind: 'ending' as const, daysLeft }
+    : settings.plan === 'free' && settings.trialUsed && untilMs && Date.now() - untilMs < 7 * 86_400_000 && Date.now() > untilMs ? { kind: 'ended' as const, daysLeft: 0 } : null;
   const now = new Date();
   const weekday = now.toLocaleDateString('en-IN', { weekday: 'long', timeZone: APP_TZ });
   const dayMonth = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', timeZone: APP_TZ });
   return (
+    <FocusProvider>
     <div className="app">
       <Sidebar showStudent={settings.studentEnabled && isPremium(settings)} showWork={settings.mode === 'work' && isPremium(settings)} premium={isPremium(settings)} trialUntil={settings.trialActive ? settings.planUntil : null} />
       <div className="main">
@@ -31,9 +41,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             <ProfileMenu name={user.name} email={user.email} showAdmin={admin} />
           </div>
         </header>
+        {trialBanner ? <TrialBanner kind={trialBanner.kind} daysLeft={trialBanner.daysLeft} /> : null}
         <div className="content">{children}</div>
         <Notifier />
+        <FocusBall />
       </div>
     </div>
+    </FocusProvider>
   );
 }

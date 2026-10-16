@@ -18,7 +18,7 @@ export interface AgendaItem {
   /** Scheduled days in a row this routine activity was done. */
   streak?: number;
   /** What the check box toggles, when the item can be ticked off from Today. */
-  toggle?: { action: 'event' | 'task' | 'deadline'; id: string };
+  toggle?: { action: 'event' | 'task' | 'deadline' | 'check'; id: string; kind?: 'meeting' | 'class' | 'reminder' | 'note' };
 }
 
 export interface TodayTask { id: string; title: string; tag: string; dueDate: string | null; dueTime: number | null; done: boolean; overdue: boolean; repeat: string }
@@ -31,7 +31,7 @@ export interface TodayData {
   agenda: AgendaItem[];
   tasks: { overdue: TodayTask[]; today: TodayTask[]; anytime: TodayTask[]; doneToday: number };
   focus: { minutes: number; sessions: { title: string; minutes: number; atMin: number }[] };
-  notes: { pinned: { id: string; title: string; snippet: string }[]; reminders: { id: string; title: string; atMin: number }[] };
+  notes: { pinned: { id: string; title: string; snippet: string; done: boolean }[]; reminders: { id: string; title: string; atMin: number; done: boolean }[] };
   work: { minutes: number; billableMinutes: number; timer: { project: string; note: string; startedAt: string } | null; meetings: number; openActions: number } | null;
   spend: { totalMinor: number; count: number; monthMinor: number; budgetMinor: number | null } | null;
   nowMin: number | null;
@@ -53,6 +53,9 @@ export async function loadToday(c: PoolClient, o: {
   const { ws, userId, day, today, tz, premium } = o;
   const isToday = day === today;
   const agenda: AgendaItem[] = [];
+  const checks = new Set((await c.query<{ k: string }>(
+    `select kind || ':' || ref_id as k from day_checks where user_id = $1 and day = $2`, [userId, day])).rows.map(r => r.k));
+  const checked = (kind: string, id: string) => checks.has(`${kind}:${id}`);
 
   // Routine activities
   const routine = await routineForDay(c, ws, userId, weekdayOf(day), day);
@@ -86,13 +89,13 @@ export async function loadToday(c: PoolClient, o: {
   // Notes: pinned ones, and reminders that fall on the day.
   const pinned = (await c.query<{ id: string; title: string; body: string }>(
     `select id, title, body from notes where workspace_id = $1 and deleted_at is null and pinned order by updated_at desc limit 3`, [ws])).rows
-    .map(n => ({ id: n.id, title: n.title || 'Untitled', snippet: n.body.replace(/\s+/g, ' ').slice(0, 90) }));
+    .map(n => ({ id: n.id, title: n.title || 'Untitled', snippet: n.body.replace(/\s+/g, ' ').slice(0, 90), done: checked('note', n.id) }));
   const reminderRows = (await c.query<{ id: string; title: string; reminder_at: Date }>(
     `select id, title, reminder_at from notes
       where workspace_id = $1 and deleted_at is null and reminder_at is not null and (reminder_at at time zone $3)::date = $2::date
       order by reminder_at`, [ws, day, tz])).rows;
-  const reminders = reminderRows.map(r => ({ id: r.id, title: r.title || 'Untitled', atMin: minutesIn(tz, r.reminder_at) }));
-  for (const r of reminders) agenda.push({ key: `n${r.id}`, kind: 'reminder', startMin: r.atMin, endMin: null, title: r.title, emoji: '🔔', meta: 'Note reminder', done: false, href: `/notes?id=${r.id}` });
+  const reminders = reminderRows.map(r => ({ id: r.id, title: r.title || 'Untitled', atMin: minutesIn(tz, r.reminder_at), done: checked('reminder', r.id) }));
+  for (const r of reminders) agenda.push({ key: `n${r.id}`, kind: 'reminder', startMin: r.atMin, endMin: null, title: r.title, emoji: '🔔', meta: 'Note reminder', done: r.done, href: `/notes?id=${r.id}`, toggle: { action: 'check', kind: 'reminder', id: r.id } });
 
   // Focus sessions finished on the day (premium)
   let focus: TodayData['focus'] = { minutes: 0, sessions: [] };
@@ -115,7 +118,7 @@ export async function loadToday(c: PoolClient, o: {
               (select count(*)::int from meeting_actions a where a.meeting_id = m.id and not a.done) as open_actions
          from meetings m where m.meeting_on = $1 and m.deleted_at is null order by m.start_min nulls last`, [day])).rows;
     for (const m of meetings) {
-      agenda.push({ key: `m${m.id}`, kind: 'meeting', startMin: m.start_min, endMin: m.end_min, title: m.title, emoji: '👥', meta: m.attendees ? `Meeting · ${m.attendees}` : 'Meeting', done: false, href: `/work?tab=meetings&meeting=${m.id}` });
+      agenda.push({ key: `m${m.id}`, kind: 'meeting', startMin: m.start_min, endMin: m.end_min, title: m.title, emoji: '👥', meta: m.attendees ? `Meeting · ${m.attendees}` : 'Meeting', done: checked('meeting', m.id), href: `/work?tab=meetings&meeting=${m.id}`, toggle: { action: 'check', kind: 'meeting', id: m.id } });
     }
     const time = (await c.query<{ minutes: number; billable: number }>(
       `select coalesce(sum(end_min - start_min), 0)::int as minutes, coalesce(sum(end_min - start_min) filter (where billable), 0)::int as billable
@@ -137,7 +140,7 @@ export async function loadToday(c: PoolClient, o: {
   if (premium && o.student) {
     const classes = (await c.query<{ id: string; title: string; kind: string; start_min: number; end_min: number; room: string }>(
       `select id, title, kind, start_min, end_min, room from classes where workspace_id = $1 and weekday = $2 and deleted_at is null order by start_min`, [ws, weekdayOf(day)])).rows;
-    for (const k of classes) agenda.push({ key: `c${k.id}`, kind: 'class', startMin: k.start_min, endMin: k.end_min, title: k.title, emoji: '📚', meta: `${k.kind}${k.room ? ` · ${k.room}` : ''}`, done: false, href: '/student' });
+    for (const k of classes) agenda.push({ key: `c${k.id}`, kind: 'class', startMin: k.start_min, endMin: k.end_min, title: k.title, emoji: '📚', meta: `${k.kind}${k.room ? ` · ${k.room}` : ''}`, done: checked('class', k.id), href: '/student', toggle: { action: 'check', kind: 'class', id: k.id } });
     const deadlines = (await c.query<{ id: string; title: string; kind: string; due_date: string; due_time: number | null; done: boolean }>(
       `select id, title, kind, due_date::text as due_date, due_time, done from deadlines
         where workspace_id = $1 and deleted_at is null and (due_date = $2 or ($3 and not done and due_date < $2))

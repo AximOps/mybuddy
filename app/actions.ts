@@ -169,6 +169,46 @@ export async function rescheduleItem(kind: 'task' | 'meeting', id: string, day: 
   return { ok };
 }
 
+/* ---------- Welcome step ---------- */
+
+/** First sign-in: mobile number (one free trial per number) and the mode that fits the person. */
+export async function completeOnboarding(formData: FormData) {
+  const user = await requireUser();
+  const { normalizePhone } = await import('@/lib/phone');
+  const phone = normalizePhone(String(formData.get('country') ?? '91'), String(formData.get('phone') ?? ''));
+  const mode = String(formData.get('mode') ?? '');
+  const level = String(formData.get('level') ?? 'college') === 'school' ? 'school' : 'college';
+  const back = (e: string) => `/welcome?error=${e}&phone=${encodeURIComponent(String(formData.get('phone') ?? ''))}&mode=${encodeURIComponent(mode)}`;
+  if (!phone) redirect(back('phone'));
+  if (!['personal', 'work', 'student'].includes(mode)) redirect(back('mode'));
+  let result = 'no_trial';
+  try {
+    result = await withUser(user.id, async c => (await c.query<{ r: string }>(`select complete_onboarding($1, $2, $3, $4) as r`, [user.id, phone, mode, level])).rows[0].r);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '';
+    redirect(back(msg.includes('PHONE_TAKEN') ? 'taken' : 'failed'));
+  }
+  revalidatePath('/', 'layout');
+  redirect(`/today?welcome=${result}`);
+}
+
+/* ---------- Today: done ticks for meetings, classes, reminders and notes ---------- */
+
+export async function toggleDayCheck(formData: FormData) {
+  const user = await requireUser();
+  const kind = String(formData.get('kind') ?? '');
+  const id = String(formData.get('id') ?? '');
+  const day = String(formData.get('day') ?? '');
+  const done = formData.get('done') === 'true';
+  if (!['meeting', 'class', 'reminder', 'note'].includes(kind) || !isUuid(id) || !isDateKey(day)) return;
+  await withUser(user.id, async c => {
+    if (done) await c.query(`insert into day_checks (user_id, kind, ref_id, day) values ($1, $2, $3, $4) on conflict do nothing`, [user.id, kind, id, day]);
+    else await c.query(`delete from day_checks where user_id = $1 and kind = $2 and ref_id = $3 and day = $4`, [user.id, kind, id, day]);
+  });
+  revalidatePath('/today');
+  revalidatePath('/week');
+}
+
 /* ---------- Calendar feed ---------- */
 
 /** Creates (or replaces) the secret token in the private calendar URL. Replacing it breaks the old link. */

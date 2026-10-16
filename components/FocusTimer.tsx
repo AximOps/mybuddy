@@ -1,122 +1,128 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Coffee, Pause, Play, SkipForward, Square, Timer } from 'lucide-react';
+import { clock, useFocus, type FocusMode } from './focus/FocusProvider';
 
-type Session = { title: string; minutes: number; endAt: number | null; remainingSec: number | null; taskId?: string | null; completeTask?: boolean };
-const KEY = 'mybuddy.focus.v1';
-const PRESETS = [15, 25, 45, 60, 90];
-const clock = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+const DURATIONS = [5, 15, 30, 45, 60, 90, 120];
+const BREAKS = [5, 10, 15, 30];
+const ROUNDS = [2, 3, 4, 6];
+const PREFS = 'mybuddy.focus.prefs.v1';
+type Prefs = { mode: FocusMode; focusMin: number; breakMin: number; rounds: number };
+const DEFAULT_PREFS: Prefs = { mode: 'single', focusMin: 30, breakMin: 5, rounds: 4 };
+const clampMin = (n: number, max = 480) => Math.max(1, Math.min(max, Math.round(n) || 1));
 
-/**
- * Browser focus timer. The running timer is kept in this browser (localStorage), so it survives a
- * page refresh. A finished session is recorded to the account through the record() server action.
- * Stopping early discards the session and records nothing.
- */
-export function FocusTimer({ record, task = null }: { record: (formData: FormData) => Promise<void>; task?: { id: string; title: string } | null }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [now, setNow] = useState(0);
+/** Preset buttons plus a "Custom" button that opens a minutes field. */
+function MinutePicker({ label, presets, value, onChange, max = 480, unit = 'min' }: { label: string; presets: number[]; value: number; onChange: (n: number) => void; max?: number; unit?: string }) {
+  const [custom, setCustom] = useState(!presets.includes(value));
+  useEffect(() => { if (!presets.includes(value)) setCustom(true); }, [value, presets]);
+  return (
+    <div className="field">
+      <span>{label}</span>
+      <div className="chip-row" role="group" aria-label={label}>
+        {presets.map(m => (
+          <button key={m} type="button" className={`chip ${!custom && value === m ? 'on' : ''}`} aria-pressed={!custom && value === m} onClick={() => { setCustom(false); onChange(m); }}>
+            {m} {unit}
+          </button>
+        ))}
+        <button type="button" className={`chip ${custom ? 'on' : ''}`} aria-pressed={custom} onClick={() => setCustom(true)}>Custom</button>
+        {custom ? (
+          <span className="chip-custom">
+            <input className="input" type="number" min={1} max={max} value={value} onChange={e => onChange(clampMin(Number(e.target.value), max))} aria-label={`${label} (custom)`} autoFocus />
+            <span className="small muted">{unit}</span>
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+const endsAt = (minutes: number) => new Date(Date.now() + minutes * 60_000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+/** The Focus page: set up a focus block or a Pomodoro, then the big running timer. */
+export function FocusTimer({ task = null }: { task?: { id: string; title: string } | null }) {
+  const { session, remaining, progress, running, start, pause, resume, stop, skipBreak, message, clearMessage } = useFocus();
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [title, setTitle] = useState(task?.title ?? '');
   const [completeTask, setCompleteTask] = useState(true);
-  const [minutes, setMinutes] = useState(25);
-  const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) setSession(JSON.parse(raw) as Session);
-    } catch { /* ignore a damaged saved timer */ }
-    setNow(Date.now());
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, []);
-
-  const save = (next: Session | null) => {
-    setSession(next);
-    if (next) localStorage.setItem(KEY, JSON.stringify(next));
-    else localStorage.removeItem(KEY);
-  };
-
-  const running = session?.endAt != null;
-  const remaining = session
-    ? running ? Math.max(0, Math.ceil(((session.endAt as number) - now) / 1000)) : session.remainingSec ?? 0
-    : 0;
-  const total = session ? session.minutes * 60 : 0;
-  const progress = total ? 1 - remaining / total : 0;
-  const finished = running && remaining === 0;
-
-  useEffect(() => {
-    if (!finished || !session) return;
-    const fd = new FormData();
-    fd.set('title', session.title);
-    fd.set('minutes', String(session.minutes));
-    if (session.taskId) { fd.set('taskId', session.taskId); fd.set('completeTask', String(!!session.completeTask)); }
-    void record(fd);
-    save(null);
-    setMessage(`Focus complete: ${session.minutes} minutes${session.title ? ` on ${session.title}` : ''}.${session.taskId && session.completeTask ? ' The task is ticked off.' : ''} Well done.`);
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('Focus complete', { body: session.title || 'Time for a break.' });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finished]);
-
-  useEffect(() => {
-    document.title = session ? `${clock(remaining)} · My Buddy` : 'Focus · My Buddy';
-  }, [remaining, session]);
-
-  const start = () => {
-    setMessage(null);
-    save({ title: title.trim(), minutes, endAt: Date.now() + minutes * 60000, remainingSec: null, taskId: task?.id ?? null, completeTask: task ? completeTask : false });
-  };
-  const pause = () => session && save({ ...session, endAt: null, remainingSec: remaining });
-  const resume = () => session && save({ ...session, endAt: Date.now() + (session.remainingSec ?? 0) * 1000, remainingSec: null });
-  const stop = () => save(null);
+  useEffect(() => { try { setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS) ?? '{}') }); } catch { /* defaults */ } }, []);
+  const update = (p: Partial<Prefs>) => setPrefs(prev => { const next = { ...prev, ...p }; try { localStorage.setItem(PREFS, JSON.stringify(next)); } catch { /* ignore */ } return next; });
 
   if (!session) {
+    const pomodoro = prefs.mode === 'pomodoro';
+    const totalMin = pomodoro ? prefs.focusMin * prefs.rounds + prefs.breakMin * (prefs.rounds - 1) : prefs.focusMin;
     return (
-      <section className="card card-body" style={{ maxWidth: 560 }}>
-        <div className="field" style={{ marginBottom: 14 }}>
+      <section className="card card-body focus-setup">
+        {message ? <div className="notice success" role="status" onClick={clearMessage}>{message}</div> : null}
+        <div className="seg focus-mode" role="tablist" aria-label="Timer type">
+          <a href="#" role="tab" aria-current={!pomodoro ? 'true' : undefined} onClick={e => { e.preventDefault(); update({ mode: 'single' }); }}><Timer size={14} aria-hidden="true" /> Focus</a>
+          <a href="#" role="tab" aria-current={pomodoro ? 'true' : undefined} onClick={e => { e.preventDefault(); update({ mode: 'pomodoro' }); }}>🍅 Pomodoro</a>
+        </div>
+        <p className="small muted">{pomodoro ? 'Work in rounds with short breaks in between. Each finished round counts as a focus session.' : 'One block of focused time. It keeps running if you switch pages; a small timer follows you.'}</p>
+
+        <div className="field">
           <label htmlFor="focus-title">What are you working on?</label>
           <input id="focus-title" className="input" value={title} maxLength={60} placeholder="Optional, e.g. Write the report" onChange={e => setTitle(e.target.value)} />
         </div>
-        <div className="field" style={{ marginBottom: 18 }}>
-          <span>Duration</span>
-          <div className="actions">
-            {PRESETS.map(m => (
-              <button key={m} type="button" className={`btn sm ${minutes === m ? 'primary' : ''}`} aria-pressed={minutes === m} onClick={() => setMinutes(m)}>
-                {m} min
-              </button>
-            ))}
-          </div>
-        </div>
+        <MinutePicker label={pomodoro ? 'Focus length per round' : 'Duration'} presets={DURATIONS} value={prefs.focusMin} onChange={n => update({ focusMin: n })} />
+        {pomodoro ? (
+          <>
+            <MinutePicker label="Break length" presets={BREAKS} value={prefs.breakMin} max={120} onChange={n => update({ breakMin: n })} />
+            <MinutePicker label="Rounds" presets={ROUNDS} value={prefs.rounds} max={12} unit="rounds" onChange={n => update({ rounds: n })} />
+          </>
+        ) : null}
         {task ? (
-          <label className="check-row" style={{ marginBottom: 16 }}>
+          <label className="check-row">
             <input type="checkbox" checked={completeTask} onChange={e => setCompleteTask(e.target.checked)} />
-            Tick off “{task.title}” when the session finishes
+            Tick off “{task.title}” when {pomodoro ? 'the last round' : 'the session'} finishes
           </label>
         ) : null}
-        <button type="button" className="btn primary block" style={{ height: 46 }} onClick={start}>Start {minutes}-minute focus</button>
-        {message ? <p className="small" role="status" style={{ marginTop: 14, color: 'var(--success)' }}>{message}</p> : null}
-        <p className="small muted" style={{ marginTop: 14 }}>The timer keeps running if you refresh this page. Finished sessions count in Stats.</p>
+        <div className="focus-summary">
+          <span>{pomodoro ? `${prefs.rounds} × ${prefs.focusMin} min focus, ${prefs.breakMin} min breaks` : `${prefs.focusMin} minutes of focus`}</span>
+          <span className="muted">Ends around {endsAt(totalMin)}</span>
+        </div>
+        <button type="button" className="btn primary block" style={{ height: 48 }}
+          onClick={() => start({ mode: prefs.mode, title: title.trim(), taskId: task?.id ?? null, completeTask: !!task && completeTask, focusMin: prefs.focusMin, breakMin: pomodoro ? prefs.breakMin : 0, rounds: pomodoro ? prefs.rounds : 1 })}>
+          <Play size={16} fill="currentColor" aria-hidden="true" /> Start {pomodoro ? 'Pomodoro' : `${prefs.focusMin}-minute focus`}
+        </button>
+        <p className="small muted">The timer keeps running if you refresh or move to another page. Finished sessions count in Stats and on Today.</p>
       </section>
     );
   }
 
-  const R = 120;
-  const C = 2 * Math.PI * R;
+  const R = 120, C = 2 * Math.PI * R;
+  const isBreak = session.phase === 'break';
   return (
-    <section className="card card-body focus-run" style={{ maxWidth: 560 }}>
-      <div className="focus-status"><span className={`focus-dot ${running ? 'on' : ''}`} aria-hidden="true" />{running ? 'Focusing' : 'Paused'}{session.title ? ` · ${session.title}` : ''}</div>
+    <section className={`card card-body focus-run ${isBreak ? 'is-break' : ''}`} style={{ maxWidth: 560 }}>
+      <div className="focus-status">
+        <span className={`focus-dot ${running ? 'on' : ''}`} aria-hidden="true" />
+        {isBreak ? 'Break' : running ? 'Focusing' : 'Paused'}
+        {session.mode === 'pomodoro' ? ` · Round ${session.round} of ${session.rounds}` : ''}
+        {session.title && !isBreak ? ` · ${session.title}` : ''}
+      </div>
       <div className="focus-ring">
         <svg viewBox="0 0 280 280" aria-hidden="true">
           <circle cx="140" cy="140" r={R} className="focus-ring-track" />
           <circle cx="140" cy="140" r={R} className="focus-ring-fill" strokeDasharray={C} strokeDashoffset={C * (1 - progress)} />
         </svg>
-        <div className="focus-dial" aria-live="polite">{clock(remaining)}</div>
+        <div className="focus-center">
+          {isBreak ? <Coffee size={22} aria-hidden="true" className="focus-break-icon" /> : null}
+          <div className="focus-dial" aria-live="polite">{clock(remaining)}</div>
+          <span className="small muted">{isBreak ? `Next: round ${session.round + 1}` : `${session.focusMin} min ${session.mode === 'pomodoro' ? 'round' : 'focus'}`}</span>
+        </div>
       </div>
+      {session.mode === 'pomodoro' ? (
+        <div className="round-dots" aria-label={`Round ${session.round} of ${session.rounds}`}>
+          {Array.from({ length: session.rounds }, (_, i) => <span key={i} className={i + 1 < session.round || (i + 1 === session.round && isBreak) ? 'done' : i + 1 === session.round ? 'now' : ''} />)}
+        </div>
+      ) : null}
       <div className="actions" style={{ justifyContent: 'center', marginTop: 8 }}>
-        <button type="button" className="btn primary" onClick={running ? pause : resume}>{running ? 'Pause' : 'Resume'}</button>
-        <button type="button" className="btn" onClick={stop}>Stop (not counted)</button>
+        <button type="button" className="btn primary" onClick={running ? pause : resume}>{running ? <><Pause size={15} fill="currentColor" /> Pause</> : <><Play size={15} fill="currentColor" /> Resume</>}</button>
+        {isBreak ? <button type="button" className="btn" onClick={skipBreak}><SkipForward size={15} /> Skip break</button> : null}
+        <button type="button" className="btn" onClick={stop}><Square size={13} fill="currentColor" /> Stop{session.mode === 'pomodoro' && (session.round > 1 || isBreak) ? '' : ' (not counted)'}</button>
       </div>
+      {session.mode === 'pomodoro' && (session.round > 1 || isBreak) ? <p className="small muted" style={{ marginTop: 10 }}>Finished rounds are already saved. Stopping only skips what is left.</p> : null}
       {'Notification' in globalThis && Notification.permission === 'default' ? (
         <button type="button" className="btn ghost sm" style={{ marginTop: 14 }} onClick={() => void Notification.requestPermission()}>Allow notifications when time is up</button>
       ) : null}

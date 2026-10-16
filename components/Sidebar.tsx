@@ -44,7 +44,16 @@ export function Sidebar({ showStudent, showWork, premium, trialUntil = null }: {
         {premium ? (
           <div className="sidebar-plan">
             <span className="plan-chip"><Sparkles size={13} aria-hidden="true" /> {trialUntil ? 'Premium trial' : 'Premium'}</span>
-            <span className="small muted">{trialUntil ? `Free until ${new Date(trialUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}. Every feature is unlocked.` : 'Every feature is unlocked. Thanks for supporting My Buddy.'}</span>
+            {trialUntil ? (() => {
+              const left = Math.max(0, Math.ceil((Date.parse(trialUntil) - Date.now()) / 86_400_000));
+              return (
+                <>
+                  <span className="small muted" suppressHydrationWarning>{left <= 1 ? 'Ends today.' : `${left} days left.`} Every feature is unlocked.</span>
+                  <div className="trial-meter" aria-hidden="true"><span style={{ width: `${Math.min(100, ((15 - left) / 15) * 100)}%` }} /></div>
+                  <Link href="/settings#plan" className={`btn sm ${left <= 5 ? 'primary' : ''}`}>Subscribe</Link>
+                </>
+              );
+            })() : <span className="small muted">Every feature is unlocked. Thanks for supporting My Buddy.</span>}
           </div>
         ) : (
           <div className="sidebar-plan is-free">

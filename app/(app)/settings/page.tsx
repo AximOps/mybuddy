@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { formatPhone } from '@/lib/phone';
 import { CopyField } from '@/components/CopyField';
 import { NotificationSettings } from '@/components/Notifier';
 import { disableCalendarFeed, resetCalendarFeed } from '@/app/actions';
@@ -63,6 +64,8 @@ export default async function SettingsPage() {
           <form action={updateProfile} className="form-grid card-body">
             <label className="field span-8">Name<input className="input" name="name" defaultValue={user!.name} required maxLength={80} /></label>
             <label className="field span-4">Email<input className="input" value={user!.email} disabled readOnly /></label>
+            <label className="field span-6">Mobile number<input className="input" value={formatPhone(settings.phone) || 'Not added yet'} disabled readOnly /></label>
+            <p className="span-6 small muted" style={{ alignSelf: 'end', paddingBottom: 10 }}>{settings.phone ? 'To change your number, contact support.' : <a href="/welcome" className="routine-link">Add your mobile number</a>}</p>
             <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Save profile</button></div>
           </form>
         ))}
@@ -78,7 +81,9 @@ export default async function SettingsPage() {
                   : settings.plan === 'premium' ? 'Premium active.'
                   : settings.trialUsed ? 'Your free trial has been used.' : 'Try premium free for 15 days.'}
               </div>
-              {settings.plan === 'free' && !settings.trialUsed ? (
+              {settings.plan === 'free' && !settings.trialUsed && !settings.phone ? (
+                <a href="/welcome" className="btn primary">Add your mobile number to start the trial</a>
+              ) : settings.plan === 'free' && !settings.trialUsed ? (
                 <form action={startFreeTrial}><button type="submit" className="btn primary">Start 15-day free trial</button></form>
               ) : (
                 settings.plan === 'premium' ? <span className="badge sun">✦ All features unlocked</span> : <button type="button" className="btn" disabled>Upgrade (payments not connected yet)</button>
