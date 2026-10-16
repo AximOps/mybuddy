@@ -148,6 +148,7 @@ export default async function SettingsPage() {
           </form>
         ))}
 
+        <div id="mode" style={{ scrollMarginTop: 80 }} />
         {section('Mode', (
           <form action={updateMode} className="card-body actions">
             <button type="submit" name="mode" value="personal" className={`btn ${settings.mode === 'personal' ? 'primary' : ''}`}>Personal</button>

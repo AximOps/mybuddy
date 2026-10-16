@@ -17,7 +17,7 @@ const ITEMS = [
 ];
 
 /** Side navigation on desktop, and a bottom bar with the same links on phones. */
-export function Sidebar({ showStudent, showWork, premium, trialUntil = null }: { name?: string; email?: string; showStudent: boolean; showWork: boolean; premium: boolean; trialUntil?: string | null }) {
+export function Sidebar({ showStudent, showWork, showTeam = false, premium, trialUntil = null }: { name?: string; email?: string; showStudent: boolean; showWork: boolean; showTeam?: boolean; premium: boolean; trialUntil?: string | null }) {
   const PREMIUM_HREFS = ['/focus', '/spend', '/organisation', '/student', '/work'];
   const pathname = usePathname();
   // Spending sits right after Notes. Student and Work follow it, when they are on.
@@ -26,7 +26,9 @@ export function Sidebar({ showStudent, showWork, premium, trialUntil = null }: {
     ...(showStudent ? [{ href: '/student', label: 'Student', icon: GraduationCap }] : []),
     ...(showWork ? [{ href: '/work', label: 'Work', icon: Briefcase }] : []),
   ];
-  const items = [...ITEMS.slice(0, spendAt), ...extras, ...ITEMS.slice(spendAt)];
+  // Team is for Work and Student modes only.
+  const base = ITEMS.filter(i => i.href !== '/organisation' || showTeam);
+  const items = [...base.slice(0, spendAt), ...extras, ...base.slice(spendAt)];
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   return (
     <>

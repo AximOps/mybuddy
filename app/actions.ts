@@ -1232,6 +1232,7 @@ async function orgRoleOf(c: import('pg').PoolClient, orgId: string, userId: stri
 export async function createOrganisation(formData: FormData) {
   const user = await requireUser();
   if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  if (!(await withUser(user.id, async c => (await getSettings(c, user.id)).mode !== 'personal'))) return; // Team is for Work and Student
   const name = text(formData.get('name'), 120);
   if (!name) return;
   await withUser(user.id, async c => {
@@ -1243,6 +1244,7 @@ export async function createOrganisation(formData: FormData) {
 export async function inviteMember(formData: FormData) {
   const user = await requireUser();
   if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  if (!(await withUser(user.id, async c => (await getSettings(c, user.id)).mode !== 'personal'))) return; // Team is for Work and Student
   const orgId = String(formData.get('orgId') ?? '');
   const email = text(formData.get('email'), 254).toLowerCase();
   const role = String(formData.get('role') ?? 'member') as OrgRole;

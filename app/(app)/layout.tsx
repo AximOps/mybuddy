@@ -28,7 +28,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <FocusProvider>
     <div className="app">
-      <Sidebar showStudent={settings.studentEnabled && isPremium(settings)} showWork={settings.mode === 'work' && isPremium(settings)} premium={isPremium(settings)} trialUntil={settings.trialActive ? settings.planUntil : null} />
+      <Sidebar showStudent={settings.studentEnabled && isPremium(settings)} showWork={settings.mode === 'work' && isPremium(settings)} showTeam={settings.mode !== 'personal'} premium={isPremium(settings)} trialUntil={settings.trialActive ? settings.planUntil : null} />
       <div className="main">
         <header className="topbar">
           <span className="mobile-brand"><BrandLockup size={30} /></span>

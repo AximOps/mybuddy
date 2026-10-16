@@ -35,3 +35,8 @@
 ## Navigation (added with v19)
 - **Week** moved out of the sidebar. It is a button in Today's header, next to Previous, Today and Next.
 - **Spending** sits directly after **Notes** in the sidebar. Student and Work follow it when they are on.
+
+## Team only in Work and Student mode
+- **Team** appears in the sidebar only in Work or Student mode. Personal mode does not show it.
+- The Team page in Personal mode shows a short note with a link to Settings → Mode.
+- Creating a team and inviting people are refused in Personal mode.

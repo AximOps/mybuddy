@@ -1,6 +1,8 @@
 import { PremiumGate } from '@/components/PremiumGate';
 import { changeMemberRole, createOrganisation, inviteMember, removeMember, revokeInvite } from '@/app/actions';
+import Link from 'next/link';
 import { withUser } from '@/lib/db';
+import { getSettings } from '@/lib/settings';
 import { getCurrentUser } from '@/lib/session';
 import { dateKeyIn } from '@/lib/time';
 import { APP_TZ } from '@/lib/time';
@@ -12,6 +14,16 @@ const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', mem
 async function OrganisationPageContent({ searchParams }: { searchParams: Promise<{ invited?: string; sent?: string; mailError?: string }> }) {
   const user = await getCurrentUser();
   const { invited, sent, mailError } = await searchParams;
+  const settings = await withUser(user!.id, async c => getSettings(c, user!.id));
+  if (settings.mode === 'personal') {
+    return (
+      <section className="card card-body" style={{ maxWidth: 560 }}>
+        <h1>Team is for Work and Student</h1>
+        <p className="muted" style={{ margin: '8px 0 16px' }}>Teams share projects, timesheets and approvals, so they are turned on in Work or Student mode. Personal mode stays focused on your own planning.</p>
+        <Link className="btn primary" href="/settings#mode">Change mode in Settings</Link>
+      </section>
+    );
+  }
 
   const data = await withUser(user!.id, async c => {
     const orgs = (await c.query<{ id: string; name: string; role: string }>(
