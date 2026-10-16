@@ -36,10 +36,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     for (const t of tasks) out.push({ uid: `task-${t.id}`, title: `☐ ${t.title}`, day: t.due_date, startMin: t.due_time, endMin: null, description: `To-do · ${t.tag}`, url: `${origin}/tasks` });
 
     if (premium) {
-      const meetings = (await c.query<{ id: string; title: string; meeting_on: string; start_min: number | null; end_min: number | null; attendees: string; agenda: string }>(
-        `select id, title, meeting_on::text as meeting_on, start_min, end_min, attendees, agenda from meetings
+      const meetings = (await c.query<{ id: string; title: string; meeting_on: string; start_min: number | null; end_min: number | null; attendees: string; agenda: string; meet_url: string | null }>(
+        `select id, title, meeting_on::text as meeting_on, start_min, end_min, attendees, agenda, meet_url from meetings
           where deleted_at is null and meeting_on between $1 and $2`, [from, to])).rows;
-      for (const m of meetings) out.push({ uid: `meeting-${m.id}`, title: m.title, day: m.meeting_on, startMin: m.start_min, endMin: m.end_min, description: [m.attendees && `With: ${m.attendees}`, m.agenda].filter(Boolean).join('\n'), url: `${origin}/work?tab=meetings&meeting=${m.id}` });
+      for (const m of meetings) out.push({ uid: `meeting-${m.id}`, title: m.title, day: m.meeting_on, startMin: m.start_min, endMin: m.end_min, description: [m.meet_url && `Join: ${m.meet_url}`, m.attendees && `With: ${m.attendees}`, m.agenda].filter(Boolean).join('\n'), location: m.meet_url ?? undefined, url: `${origin}/work?tab=meetings&meeting=${m.id}` });
 
       if (settings.studentEnabled) {
         const classes = (await c.query<{ id: string; title: string; kind: string; weekday: number; start_min: number; end_min: number; room: string }>(

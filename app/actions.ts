@@ -1092,16 +1092,18 @@ export async function addMeeting(formData: FormData) {
   const start = formData.get('start') ? parseHM(formData.get('start')) : null;
   const end = formData.get('end') ? parseHM(formData.get('end')) : null;
   if (!title || !isDateKey(meetingOn) || (end !== null && start !== null && end <= start)) return;
+  const { normalizeMeetUrl } = await import('@/lib/meeting-link');
+  const meetUrl = normalizeMeetUrl(formData.get('meetUrl'));
   const id = randomUUID();
   await withUser(user.id, async c => {
     const ws = await activeWorkspaceId(c, user.id);
     await c.query(
-      `insert into meetings (id, workspace_id, title, meeting_on, start_min, end_min, attendees, agenda, notes)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [id, ws, title, meetingOn, start, end, text(formData.get('attendees'), 300), String(formData.get('agenda') ?? '').slice(0, 5000), String(formData.get('notes') ?? '').slice(0, 20000)]);
+      `insert into meetings (id, workspace_id, title, meeting_on, start_min, end_min, attendees, agenda, notes, meet_url)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [id, ws, title, meetingOn, start, end, text(formData.get('attendees'), 300), String(formData.get('agenda') ?? '').slice(0, 5000), String(formData.get('notes') ?? '').slice(0, 20000), meetUrl || null]);
   });
   revalidatePath('/work');
-  redirect(`/work?tab=meetings&meeting=${id}`);
+  redirect(`/work?tab=meetings&meeting=${id}${meetUrl === null ? '&link=bad' : ''}`);
 }
 
 export async function updateMeeting(formData: FormData) {
@@ -1113,12 +1115,53 @@ export async function updateMeeting(formData: FormData) {
   const start = formData.get('start') ? parseHM(formData.get('start')) : null;
   const end = formData.get('end') ? parseHM(formData.get('end')) : null;
   if (!isUuid(id) || !title || !isDateKey(meetingOn)) return;
+  const { normalizeMeetUrl } = await import('@/lib/meeting-link');
+  const meetUrl = normalizeMeetUrl(formData.get('meetUrl'));
   await withUser(user.id, async c => {
+    // A link that is not usable keeps the saved one; the page says so.
     await c.query(
-      `update meetings set title = $2, meeting_on = $3, start_min = $4, end_min = $5, attendees = $6, agenda = $7, notes = $8, updated_at = now() where id = $1`,
-      [id, title, meetingOn, start, end, text(formData.get('attendees'), 300), String(formData.get('agenda') ?? '').slice(0, 5000), String(formData.get('notes') ?? '').slice(0, 20000)]);
+      `update meetings set title = $2, meeting_on = $3, start_min = $4, end_min = $5, attendees = $6, agenda = $7, notes = $8,
+              meet_url = case when $9::boolean then meet_url else $10 end, updated_at = now() where id = $1`,
+      [id, title, meetingOn, start, end, text(formData.get('attendees'), 300), String(formData.get('agenda') ?? '').slice(0, 5000), String(formData.get('notes') ?? '').slice(0, 20000), meetUrl === null, meetUrl || null]);
   });
   revalidatePath('/work');
+  redirect(`/work?tab=meetings&meeting=${id}${meetUrl === null ? '&link=bad' : '&saved=1'}`);
+}
+
+/**
+ * Emails a calendar invite for the meeting, with the Google Meet (or other) link, to the addresses
+ * given. Replies go to the person who sent it. Sending again updates the invite in people's calendars.
+ */
+export async function sendMeetingInvite(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  const back = `/work?tab=meetings&meeting=${id}`;
+  const raw = String(formData.get('to') ?? '');
+  const to = [...new Set((raw.match(/[^\s,;<>"]+@[^\s,;<>"]+\.[^\s,;<>"]+/g) ?? []).map(e => e.toLowerCase()))].filter(e => e !== user.email.toLowerCase()).slice(0, 25);
+  const copyMe = formData.get('copyMe') === 'on';
+  if (!to.length) redirect(`${back}&invite=none`);
+  const m = await withUser(user.id, async c => {
+    const row = (await c.query<{ title: string; meeting_on: string; start_min: number | null; end_min: number | null; agenda: string; meet_url: string | null; invite_seq: number }>(
+      `update meetings set invite_seq = invite_seq + 1, invite_sent_at = now() where id = $1 and deleted_at is null
+       returning title, meeting_on::text as meeting_on, start_min, end_min, agenda, meet_url, invite_seq`, [id])).rows[0];
+    return row ? { ...row, tz: (await getSettings(c, user.id)).timezone } : null;
+  });
+  if (!m) return;
+  const { buildInviteIcs, inviteText, whenText } = await import('@/lib/meeting-invite');
+  const input = { id, seq: m.invite_seq, title: m.title, day: m.meeting_on, startMin: m.start_min, endMin: m.end_min, tz: m.tz, meetUrl: m.meet_url, agenda: m.agenda, organizer: { name: user.name, email: user.email }, attendees: to };
+  const attachment = { filename: 'invite.ics', content: Buffer.from(buildInviteIcs(input)).toString('base64'), contentType: 'text/calendar; method=REQUEST; charset=UTF-8' };
+  const subject = `${m.invite_seq > 1 ? 'Updated invitation' : 'Invitation'}: ${m.title} · ${whenText(input)}`;
+  const body = inviteText(input);
+  const { sendMail } = await import('@/lib/mail');
+  let sent = 0, failed = false, off = false;
+  for (const addr of copyMe ? [...to, user.email.toLowerCase()] : to) {
+    const r = await sendMail(addr, subject, body, { replyTo: user.email, attachments: [attachment] });
+    if (r.sent) { if (addr !== user.email.toLowerCase()) sent++; } else if (r.error) failed = true; else off = true;
+  }
+  revalidatePath('/work');
+  redirect(`${back}&invite=${off && !sent ? 'off' : failed ? 'partial' : 'sent'}&n=${sent}`);
 }
 
 export async function deleteMeeting(formData: FormData) {
@@ -1193,8 +1236,8 @@ export async function emailMeetingNotes(formData: FormData) {
   const back = `/work?tab=meetings&meeting=${id}`;
   if (!to.length) redirect(`${back}&mail=none`);
   const m = await withUser(user.id, async c => {
-    const meeting = (await c.query<{ title: string; meeting_on: string; start_min: number | null; end_min: number | null; attendees: string; agenda: string; notes: string }>(
-      `select title, meeting_on::text as meeting_on, start_min, end_min, attendees, agenda, notes from meetings where id = $1 and deleted_at is null`, [id])).rows[0];
+    const meeting = (await c.query<{ title: string; meeting_on: string; start_min: number | null; end_min: number | null; attendees: string; agenda: string; notes: string; meet_url: string | null }>(
+      `select title, meeting_on::text as meeting_on, start_min, end_min, attendees, agenda, notes, meet_url from meetings where id = $1 and deleted_at is null`, [id])).rows[0];
     const actions = (await c.query<{ text: string; done: boolean }>(`select text, done from meeting_actions where meeting_id = $1 order by sort_order`, [id])).rows;
     return meeting ? { ...meeting, actions } : null;
   });
@@ -1202,7 +1245,7 @@ export async function emailMeetingNotes(formData: FormData) {
   const { fmtMinutes } = await import('@/lib/time');
   const when = `${m.meeting_on}${m.start_min !== null ? ` · ${fmtMinutes(m.start_min)}${m.end_min !== null ? `–${fmtMinutes(m.end_min)}` : ''}` : ''}`;
   const body = [
-    m.title, when, m.attendees ? `Attendees: ${m.attendees}` : '', '',
+    m.title, when, m.attendees ? `Attendees: ${m.attendees}` : '', m.meet_url ? `Call link: ${m.meet_url}` : '', '',
     m.agenda ? `AGENDA\n${m.agenda}\n` : '',
     m.notes ? `NOTES\n${m.notes}\n` : '',
     m.actions.length ? `ACTION ITEMS\n${m.actions.map(a => `${a.done ? '[x]' : '[ ]'} ${a.text}`).join('\n')}\n` : '',
@@ -1274,10 +1317,10 @@ export async function createOrganisation(formData: FormData) {
   if (!(await withUser(user.id, async c => (await getSettings(c, user.id)).mode !== 'personal'))) return; // Team is for Work and Student
   const name = text(formData.get('name'), 120);
   if (!name) return;
-  await withUser(user.id, async c => {
-    await c.query(`select create_organisation($1, $2)`, [user.id, name]);
-  });
-  revalidatePath('/organisation');
+  const orgId = await withUser(user.id, async c =>
+    (await c.query<{ id: string }>(`select create_organisation($1, $2) as id`, [user.id, name])).rows[0].id);
+  revalidatePath('/teams');
+  redirect(`/teams?team=${orgId}&created=1`);
 }
 
 export async function inviteMember(formData: FormData) {
@@ -1308,9 +1351,9 @@ export async function inviteMember(formData: FormData) {
   const { sendMail } = await import('@/lib/mail');
   const result = await sendMail(email, `${inviter} invited you to ${orgName} on My Buddy`,
     `${inviter} invited you to join ${orgName} on My Buddy.\n\nOpen this link and log in with ${email} to accept:\n${link}\n\nThe link works once and expires in ${INVITE_DAYS} days.`);
-  revalidatePath('/organisation');
-  if (result.sent) redirect(`/organisation?sent=${encodeURIComponent(email)}`);
-  redirect(`/organisation?invited=${encodeURIComponent(link)}${result.error ? `&mailError=${encodeURIComponent(result.error)}` : ''}`);
+  revalidatePath('/teams');
+  if (result.sent) redirect(`/teams?team=${orgId}&sent=${encodeURIComponent(email)}`);
+  redirect(`/teams?team=${orgId}&invited=${encodeURIComponent(link)}${result.error ? `&mailError=${encodeURIComponent(result.error)}` : ''}`);
 }
 
 export async function revokeInvite(formData: FormData) {
@@ -1321,7 +1364,7 @@ export async function revokeInvite(formData: FormData) {
   await withUser(user.id, async c => {
     await c.query(`delete from invitations where id = $1`, [id]);
   });
-  revalidatePath('/organisation');
+  revalidatePath('/teams');
 }
 
 export async function acceptInvitation(formData: FormData) {
@@ -1329,18 +1372,28 @@ export async function acceptInvitation(formData: FormData) {
   if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const { hashToken } = await import('@/lib/invite');
   const token = String(formData.get('token') ?? '');
-  if (!token) redirect('/organisation');
+  if (!token) redirect('/teams');
+  let orgId = '';
   try {
-    await withUser(user.id, async c => {
-      await c.query(`select accept_invitation($1, $2)`, [user.id, hashToken(token)]);
-    });
+    orgId = await withUser(user.id, async c =>
+      (await c.query<{ id: string }>(`select accept_invitation($1, $2) as id`, [user.id, hashToken(token)])).rows[0]?.id ?? '');
   } catch (error) {
     const message = error instanceof Error ? error.message.replace(/^error: /i, '') : 'The invitation could not be accepted.';
     redirect(`/invite/${encodeURIComponent(token)}?error=${encodeURIComponent(message)}`);
   }
-  revalidatePath('/organisation');
-  redirect('/organisation');
+  revalidatePath('/teams');
+  redirect(orgId ? `/teams?team=${orgId}` : '/teams');
 }
+
+/** Database errors raised by the team functions carry a message for people; anything else gets a generic one. */
+function teamError(error: unknown) {
+  const m = error instanceof Error ? error.message.replace(/^error: /i, '') : '';
+  return /^[A-Z][^\n]{3,120}\.$/.test(m) ? m : 'That did not work. Please try again.';
+}
+async function teamCall(userId: string, orgId: string, sql: string, params: unknown[]): Promise<string | null> {
+  try { await withUser(userId, async c => { await c.query(sql, params); }); return null; } catch (e) { return teamError(e); }
+}
+const teamUrl = (orgId: string, extra = '') => `/teams?team=${orgId}${extra}`;
 
 /** Changes someone's role. Admins manage members and admins; only owners change owners or make owners. */
 export async function changeMemberRole(formData: FormData) {
@@ -1350,38 +1403,72 @@ export async function changeMemberRole(formData: FormData) {
   const userId = String(formData.get('userId') ?? '');
   const role = String(formData.get('role') ?? '') as OrgRole;
   if (!isUuid(orgId) || !userId || !ROLES.includes(role)) return;
-  await withUser(user.id, async c => {
-    const mine = await orgRoleOf(c, orgId, user.id);
-    const theirs = await orgRoleOf(c, orgId, userId);
-    if (!mine || mine === 'member' || !theirs) return;
-    if ((theirs === 'owner' || role === 'owner') && mine !== 'owner') return;
-    await c.query(`update organisation_members set role = $3 where organisation_id = $1 and user_id = $2`, [orgId, userId, role]);
-    await c.query(
-      `update workspace_members set role = $3
-        where user_id = $2 and workspace_id = (select id from workspaces where organisation_id = $1 and kind = 'organisation')`,
-      [orgId, userId, role === 'owner' ? 'owner' : 'editor']);
-  });
-  revalidatePath('/organisation');
+  const error = await teamCall(user.id, orgId, `select set_org_member_role($1, $2, $3, $4)`, [user.id, orgId, userId, role]);
+  revalidatePath('/teams');
+  if (error) redirect(teamUrl(orgId, `&error=${encodeURIComponent(error)}`));
 }
 
-/** Removes someone from the organisation. Admins cannot remove owners or themselves. */
+/** Removes someone from the team, including their access to its shared workspace. */
 export async function removeMember(formData: FormData) {
   const user = await requireUser();
   if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   const orgId = String(formData.get('orgId') ?? '');
   const userId = String(formData.get('userId') ?? '');
   if (!isUuid(orgId) || !userId || userId === user.id) return;
-  await withUser(user.id, async c => {
-    const mine = await orgRoleOf(c, orgId, user.id);
-    const theirs = await orgRoleOf(c, orgId, userId);
-    if (!mine || mine === 'member' || !theirs) return;
-    if (theirs === 'owner' && mine !== 'owner') return;
-    await c.query(`delete from organisation_members where organisation_id = $1 and user_id = $2`, [orgId, userId]);
-    await c.query(
-      `delete from workspace_members where user_id = $2 and workspace_id = (select id from workspaces where organisation_id = $1 and kind = 'organisation')`,
-      [orgId, userId]);
-  });
-  revalidatePath('/organisation');
+  const error = await teamCall(user.id, orgId, `select remove_org_member($1, $2, $3)`, [user.id, orgId, userId]);
+  revalidatePath('/teams');
+  if (error) redirect(teamUrl(orgId, `&error=${encodeURIComponent(error)}`));
+}
+
+export async function renameTeam(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const orgId = String(formData.get('orgId') ?? '');
+  const name = text(formData.get('name'), 120);
+  if (!isUuid(orgId) || !name) return;
+  const error = await teamCall(user.id, orgId, `select rename_organisation($1, $2, $3)`, [user.id, orgId, name]);
+  revalidatePath('/teams'); revalidatePath('/work');
+  redirect(teamUrl(orgId, error ? `&error=${encodeURIComponent(error)}` : ''));
+}
+
+/** Leaves a team. The last person to leave deletes it. A sole owner hands over ownership first. */
+export async function leaveTeam(formData: FormData) {
+  const user = await requireUser();
+  const orgId = String(formData.get('orgId') ?? '');
+  if (!isUuid(orgId)) return;
+  let result = '';
+  try {
+    result = await withUser(user.id, async c => (await c.query<{ r: string }>(`select leave_organisation($1, $2) as r`, [user.id, orgId])).rows[0].r);
+  } catch (e) {
+    redirect(teamUrl(orgId, `&error=${encodeURIComponent(teamError(e))}`));
+  }
+  revalidatePath('/teams'); revalidatePath('/work');
+  redirect(`/teams?${result === 'deleted' ? 'deleted' : 'left'}=1`);
+}
+
+/** Deletes a team and everything in its shared workspace. Owners only, after typing the team name. */
+export async function deleteTeam(formData: FormData) {
+  const user = await requireUser();
+  const orgId = String(formData.get('orgId') ?? '');
+  const confirm = text(formData.get('confirm'), 120);
+  if (!isUuid(orgId)) return;
+  const name = await withUser(user.id, async c => (await c.query<{ name: string }>(`select name from organisations where id = $1`, [orgId])).rows[0]?.name ?? '');
+  if (!name || confirm.toLowerCase() !== name.toLowerCase()) redirect(teamUrl(orgId, `&error=${encodeURIComponent('Type the team name exactly to delete it.')}`));
+  const error = await teamCall(user.id, orgId, `select delete_organisation($1, $2)`, [user.id, orgId]);
+  if (error) redirect(teamUrl(orgId, `&error=${encodeURIComponent(error)}`));
+  revalidatePath('/teams'); revalidatePath('/work');
+  redirect('/teams?deleted=1');
+}
+
+/** Opens the Work page in a team's workspace. */
+export async function workInTeam(formData: FormData) {
+  const user = await requireUser();
+  const orgId = String(formData.get('orgId') ?? '');
+  if (!isUuid(orgId)) return;
+  const ws = await withUser(user.id, async c => (await c.query<{ id: string }>(
+    `select w.id from workspaces w join workspace_members m on m.workspace_id = w.id and m.user_id = $2 where w.organisation_id = $1`, [orgId, user.id])).rows[0]?.id);
+  if (ws) (await cookies()).set(WORKSPACE_COOKIE, ws, { path: '/', maxAge: 60 * 60 * 24 * 365, sameSite: 'lax' });
+  redirect('/work');
 }
 
 async function weekIsApproved(c: import('pg').PoolClient, ws: string, userId: string, day: string) {

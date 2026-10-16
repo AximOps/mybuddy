@@ -13,7 +13,7 @@ export default async function InvitePage({ params, searchParams }: { params: Pro
     <div className="auth">
       <div className="auth-form">
         <div className="auth-card">
-          <h1>Join the organisation</h1>
+          <h1>Join the team</h1>
           {error ? <p className="error" role="alert">{error}</p> : null}
           {user ? (
             <>

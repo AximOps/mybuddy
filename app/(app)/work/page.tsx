@@ -1,6 +1,8 @@
 import { PremiumGate } from '@/components/PremiumGate';
 import Link from 'next/link';
-import { addClient, addMeeting, addMeetingAction, addProject, addTimeEntry, actionToTask, createInvoice, emailMeetingNotes, deleteClient, deleteMeeting, deleteMeetingAction, deleteProject, deleteTimeEntry, startTimer, stopTimer, toggleMeetingAction, updateMeeting } from '@/app/actions';
+import { addClient, addMeeting, addMeetingAction, addProject, addTimeEntry, actionToTask, createInvoice, emailMeetingNotes, deleteClient, deleteMeeting, deleteMeetingAction, deleteProject, deleteTimeEntry, sendMeetingInvite, startTimer, stopTimer, toggleMeetingAction, updateMeeting } from '@/app/actions';
+import { CalendarPlus, Video } from 'lucide-react';
+import { MEET_NEW_URL, callLabel } from '@/lib/meeting-link';
 import { Elapsed } from '@/components/work/Elapsed';
 import { withUser } from '@/lib/db';
 import { getCurrentUser } from '@/lib/session';
@@ -15,6 +17,20 @@ export const dynamic = 'force-dynamic';
 
 type Tab = 'time' | 'projects' | 'meetings' | 'reports' | 'approvals';
 const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** The video call field on a meeting: paste a Google Meet link, or open Google Meet to make one. */
+function MeetField({ value }: { value?: string | null }) {
+  return (
+    <div className="field span-12 meet-field">
+      <label htmlFor="meetUrl"><Video size={14} className="h-icon" aria-hidden="true" />Google Meet link</label>
+      <div className="meet-row">
+        <input id="meetUrl" className="input" name="meetUrl" maxLength={300} defaultValue={value ?? ''} placeholder="https://meet.google.com/abc-defg-hij" inputMode="url" autoComplete="off" />
+        <a className="btn" href={MEET_NEW_URL} target="_blank" rel="noopener noreferrer"><Video size={15} /> Create a Google Meet</a>
+      </div>
+      <span className="small muted" style={{ fontWeight: 500 }}>Create a Google Meet opens a new meeting room in Google Meet. Copy its link and paste it here. A Zoom or Teams link works too.</span>
+    </div>
+  );
+}
 
 async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await getCurrentUser();
@@ -50,12 +66,12 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
         where e.workspace_id = $1 and e.deleted_at is null and e.spent_on >= $2 and e.spent_on <= $3
         order by e.spent_on, e.start_min`, [ws, monday, sunday])).rows;
 
-    const meetings = (await c.query<{ id: string; title: string; meeting_on: string; start_min: number | null; end_min: number | null }>(
-      `select id, title, meeting_on::text as meeting_on, start_min, end_min from meetings
+    const meetings = (await c.query<{ id: string; title: string; meeting_on: string; start_min: number | null; end_min: number | null; meet_url: string | null }>(
+      `select id, title, meeting_on::text as meeting_on, start_min, end_min, meet_url from meetings
         where workspace_id = $1 and deleted_at is null order by meeting_on desc, start_min nulls last limit 100`, [ws])).rows;
     const selectedId = isUuid(sp.meeting ?? '') ? sp.meeting! : null;
-    const meeting = selectedId ? (await c.query<{ id: string; title: string; meeting_on: string; start_min: number | null; end_min: number | null; attendees: string; agenda: string; notes: string }>(
-      `select id, title, meeting_on::text as meeting_on, start_min, end_min, attendees, agenda, notes from meetings where id = $1 and workspace_id = $2 and deleted_at is null`, [selectedId, ws])).rows[0] ?? null : null;
+    const meeting = selectedId ? (await c.query<{ id: string; title: string; meeting_on: string; start_min: number | null; end_min: number | null; attendees: string; agenda: string; notes: string; meet_url: string | null; invite_sent_at: Date | null }>(
+      `select id, title, meeting_on::text as meeting_on, start_min, end_min, attendees, agenda, notes, meet_url, invite_sent_at from meetings where id = $1 and workspace_id = $2 and deleted_at is null`, [selectedId, ws])).rows[0] ?? null : null;
     const actions = meeting ? (await c.query<{ id: string; text: string; done: boolean }>(
       `select id, text, done from meeting_actions where meeting_id = $1 order by sort_order`, [meeting.id])).rows : [];
     const members = (await c.query<{ id: string; name: string; email: string }>(
@@ -92,6 +108,10 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
   const timerProject = data.timer ? data.projects.find(p => p.id === data.timer!.projectId) : null;
   const projectOptions = data.projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.client_name ? ` · ${p.client_name}` : ''}</option>);
 
+  // Emails for invites and notes: addresses typed in Attendees, plus teammates named there.
+  const inviteTo = data.meeting ? [...(data.meeting.attendees.match(/[^\s,;<>"]+@[^\s,;<>"]+\.[^\s,;<>"]+/g) ?? []),
+    ...data.members.filter(mb => mb.id !== user!.id && data.meeting!.attendees.toLowerCase().includes((mb.name || '~').split(' ')[0].toLowerCase())).map(mb => mb.email)]
+    .map(e => e.toLowerCase()).filter((v, i, arr) => arr.indexOf(v) === i).join(', ') : '';
   return (
     <>
       <div className="page-head">
@@ -277,7 +297,7 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
               <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                 {data.meetings.map(m => (
                   <li key={m.id} className="card-body" style={{ borderTop: '1px solid var(--line)', background: m.id === data.meeting?.id ? 'var(--accent-soft)' : undefined }}>
-                    <Link href={`/work?tab=meetings&meeting=${m.id}`}><strong>{m.title}</strong></Link>
+                    <Link href={`/work?tab=meetings&meeting=${m.id}`}><strong>{m.title}</strong>{m.meet_url ? <Video size={14} className="meet-list-icon" aria-label={`Has a ${callLabel(m.meet_url)} link`} /> : null}</Link>
                     <div className="small muted">{m.meeting_on}{m.start_min !== null && m.end_min !== null ? ` · ${fmtMinutes(m.start_min)} – ${fmtMinutes(m.end_min)}` : ''}</div>
                   </li>
                 ))}
@@ -287,14 +307,20 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
           <div className="stack">
             {data.meeting ? (
               <section className="card card-body">
-                <h2 style={{ marginBottom: 12 }}>{data.meeting.title}</h2>
+                <div className="meeting-head">
+                  <h2>{data.meeting.title}</h2>
+                  {data.meeting.meet_url ? <a className="btn primary" href={data.meeting.meet_url} target="_blank" rel="noopener noreferrer"><Video size={16} /> Join {callLabel(data.meeting.meet_url)}</a> : null}
+                </div>
+                {sp.link === 'bad' ? <div className="notice danger" role="alert">That call link was not saved. Paste a full link such as https://meet.google.com/abc-defg-hij.</div>
+                  : sp.saved ? <div className="notice success" role="status">Meeting saved.{data.meeting.invite_sent_at ? ' Send the invite again so people get the changes.' : ''}</div> : null}
                 <form action={updateMeeting} className="form-grid">
                   <input type="hidden" name="id" value={data.meeting.id} />
                   <label className="field span-12">Title<input className="input" name="title" required maxLength={120} defaultValue={data.meeting.title} /></label>
                   <label className="field span-4">Date<input className="input" type="date" name="meetingOn" required defaultValue={data.meeting.meeting_on} /></label>
                   <label className="field span-4">Starts<input className="input" type="time" name="start" defaultValue={data.meeting.start_min === null ? '' : `${String(Math.floor(data.meeting.start_min / 60)).padStart(2, '0')}:${String(data.meeting.start_min % 60).padStart(2, '0')}`} /></label>
                   <label className="field span-4">Ends<input className="input" type="time" name="end" defaultValue={data.meeting.end_min === null ? '' : `${String(Math.floor(data.meeting.end_min / 60)).padStart(2, '0')}:${String(data.meeting.end_min % 60).padStart(2, '0')}`} /></label>
-                  <label className="field span-12">Attendees<input className="input" name="attendees" maxLength={300} defaultValue={data.meeting.attendees} /></label>
+                  <MeetField value={data.meeting.meet_url} />
+                  <label className="field span-12">Attendees<input className="input" name="attendees" maxLength={300} defaultValue={data.meeting.attendees} placeholder="Names or emails, e.g. ben@company.com, Cara" /></label>
                   <label className="field span-12">Agenda<textarea name="agenda" rows={4} defaultValue={data.meeting.agenda} /></label>
                   <label className="field span-12">Notes<textarea name="notes" rows={6} defaultValue={data.meeting.notes} /></label>
                   <div className="span-12" style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -330,6 +356,26 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                     <button className="btn" type="submit">Add</button>
                   </form>
                 </div>
+                <div className="mail-box invite-box">
+                  <h2 style={{ marginBottom: 4 }}><CalendarPlus size={16} className="h-icon" aria-hidden="true" />Send invite</h2>
+                  <p className="small muted" style={{ margin: '0 0 10px' }}>
+                    {data.meeting.meet_url ? <>Emails a calendar invite with the {callLabel(data.meeting.meet_url)} link. </> : <>Add a Google Meet link above first, so the invite has a link to join. </>}
+                    It goes straight into Google Calendar, Outlook and Apple Calendar, and replies come to you.
+                    {data.meeting.invite_sent_at ? ` Last sent ${data.meeting.invite_sent_at.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: data.settings.timezone })}.` : ''}
+                  </p>
+                  {sp.invite === 'sent' ? <div className="notice success" role="status">Invite sent to {sp.n} {sp.n === '1' ? 'person' : 'people'}.</div>
+                    : sp.invite === 'off' ? <div className="notice danger" role="alert">Email is not set up for this site yet (RESEND_API_KEY and MAIL_FROM).</div>
+                    : sp.invite === 'partial' ? <div className="notice danger" role="alert">Some invites could not be sent. {sp.n} went out.</div>
+                    : sp.invite === 'none' ? <div className="notice danger" role="alert">Add at least one email address other than yours.</div> : null}
+                  <form action={sendMeetingInvite} className="stack" style={{ gap: 10 }}>
+                    <input type="hidden" name="id" value={data.meeting.id} />
+                    <label className="field">To (email addresses, separated by commas)
+                      <input className="input" name="to" defaultValue={inviteTo} placeholder="ben@company.com, cara@company.com" />
+                    </label>
+                    <label className="check-row"><input type="checkbox" name="copyMe" defaultChecked /> Send me a copy</label>
+                    <button className="btn primary" type="submit" style={{ alignSelf: 'flex-start' }}><CalendarPlus size={15} /> {data.meeting.invite_sent_at ? 'Send updated invite' : 'Send invite'}</button>
+                  </form>
+                </div>
                 <div className="mail-box">
                   <h2 style={{ marginBottom: 6 }}>Email the notes</h2>
                   {sp.mail === 'sent' ? <div className="notice success" role="status">Sent to {sp.n} {sp.n === '1' ? 'person' : 'people'}.</div>
@@ -339,7 +385,7 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                   <form action={emailMeetingNotes} className="stack" style={{ gap: 10 }}>
                     <input type="hidden" name="id" value={data.meeting.id} />
                     <label className="field">To (email addresses, separated by commas)
-                      <input className="input" name="to" defaultValue={[...(data.meeting.attendees.match(/[^\s,;<>"]+@[^\s,;<>"]+\.[^\s,;<>"]+/g) ?? []), ...data.members.filter(mb => mb.id !== user!.id && data.meeting!.attendees.toLowerCase().includes((mb.name || '~').split(' ')[0].toLowerCase())).map(mb => mb.email)].filter((v, i, arr) => arr.indexOf(v) === i).join(', ')} placeholder="ben@company.com, cara@company.com" />
+                      <input className="input" name="to" defaultValue={inviteTo} placeholder="ben@company.com, cara@company.com" />
                     </label>
                     <label className="check-row"><input type="checkbox" name="copyMe" defaultChecked /> Send me a copy</label>
                     <button className="btn" type="submit">Send agenda, notes and action items</button>
@@ -358,7 +404,8 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                   <label className="field span-4">Date<input className="input" type="date" name="meetingOn" required defaultValue={data.today} /></label>
                   <label className="field span-4">Starts<input className="input" type="time" name="start" /></label>
                   <label className="field span-4">Ends<input className="input" type="time" name="end" /></label>
-                  <label className="field span-12">Attendees<input className="input" name="attendees" maxLength={300} /></label>
+                  <MeetField />
+                  <label className="field span-12">Attendees<input className="input" name="attendees" maxLength={300} placeholder="Names or emails, e.g. ben@company.com, Cara" /></label>
                   <label className="field span-12">Agenda<textarea name="agenda" rows={3} /></label>
                   <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Create meeting</button></div>
                 </form>

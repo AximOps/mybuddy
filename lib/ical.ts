@@ -1,9 +1,9 @@
 /** Small iCalendar (RFC 5545) writer for the private calendar feed. */
 
-const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\;');
+export const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
 
 /** Folds lines longer than 75 octets, as the format requires. */
-function fold(line: string): string {
+export function fold(line: string): string {
   const out: string[] = [];
   let rest = line;
   while (Buffer.byteLength(rest) > 74) {

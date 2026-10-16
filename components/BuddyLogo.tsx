@@ -18,7 +18,7 @@ export function BrandLockup({ size = 36, large = false, onDark = false }: { size
       <BuddyLogo size={size} ring={onDark} />
       <div>
         <div className="brand-word" style={large ? { fontSize: 30 } : undefined}>My <span style={onDark ? { color: '#FFFFFF' } : undefined}>Buddy</span></div>
-        <div className="brand-tag" style={onDark ? { color: 'rgba(255,255,255,0.85)' } : undefined}>Daily Planner</div>
+        <div className="brand-tag" style={onDark ? { color: 'rgba(255,255,255,0.85)' } : undefined}>Life Organized!</div>
       </div>
     </div>
   );

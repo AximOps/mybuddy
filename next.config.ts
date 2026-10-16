@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
     // Load only the icons each page uses, which makes pages faster to open.
     optimizePackageImports: ['lucide-react'],
   },
+  // The Team page moved to /teams. Query strings carry over.
+  async redirects() {
+    return [{ source: '/organisation', destination: '/teams', permanent: true }];
+  },
   async headers() {
     return [{
       source: '/sw.js',
