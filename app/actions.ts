@@ -797,6 +797,7 @@ export async function stopTimer() {
   });
   revalidatePath('/work');
   revalidatePath('/stats');
+  revalidatePath('/today');
 }
 
 export async function addTimeEntry(formData: FormData) {

@@ -1,177 +1,313 @@
 import Link from 'next/link';
-import { addEvent, toggleEvent } from '@/app/actions';
+import { ArrowRight, Bell, Briefcase, Check, Lock, NotebookPen, Pin, Plus, Timer, Wallet } from 'lucide-react';
+import { addEvent, addTask, setTaskDone, stopTimer, toggleDeadline, toggleEvent } from '@/app/actions';
 import { withUser } from '@/lib/db';
-import { listRoutines, listTasks, personalWorkspaceId, routineForDay } from '@/lib/planner';
+import { listRoutines, personalWorkspaceId } from '@/lib/planner';
 import { Hero } from '@/components/Hero';
+import { Elapsed } from '@/components/work/Elapsed';
 import { getCurrentUser } from '@/lib/session';
-import { fmtMinutes, dateKeyIn, isDateKey, longDate, shiftDateKey, weekdayOf } from '@/lib/time';
-import { getSettings } from '@/lib/settings';
+import { fmtMinutes, dateKeyIn, isDateKey, longDate, shiftDateKey } from '@/lib/time';
+import { getSettings, money } from '@/lib/settings';
 import { isPremium } from '@/lib/entitlements';
+import { hmText } from '@/lib/work';
+import { loadToday, type AgendaItem, type TodayTask } from '@/lib/today';
 
 export const dynamic = 'force-dynamic';
+
+const KIND_LABEL: Record<AgendaItem['kind'], string> = {
+  routine: 'Routine', meeting: 'Meeting', class: 'Class', task: 'To-do', deadline: 'Deadline', reminder: 'Reminder', focus: 'Focus',
+};
+
+function ToggleForm({ item, day }: { item: AgendaItem; day: string }) {
+  const t = item.toggle!;
+  const action = t.action === 'event' ? toggleEvent : t.action === 'task' ? setTaskDone : toggleDeadline;
+  return (
+    <form action={action}>
+      {t.action === 'event' ? (<><input type="hidden" name="eventId" value={t.id} /><input type="hidden" name="day" value={day} /></>)
+        : (<><input type="hidden" name="id" value={t.id} /><input type="hidden" name="done" value={item.done ? 'false' : 'true'} /></>)}
+      <button type="submit" className={`check ${item.done ? 'on' : ''}`} aria-label={item.done ? `Undo ${item.title}` : `Mark ${item.title} done`}>
+        {item.done ? <Check size={14} strokeWidth={3} /> : null}
+      </button>
+    </form>
+  );
+}
+
+function TaskRow({ t }: { t: TodayTask }) {
+  return (
+    <li className={`mini-row ${t.done ? 'done' : ''}`}>
+      <form action={setTaskDone}>
+        <input type="hidden" name="id" value={t.id} /><input type="hidden" name="done" value={t.done ? 'false' : 'true'} />
+        <button type="submit" className={`check ${t.done ? 'on' : ''}`} aria-label={t.done ? `Undo ${t.title}` : `Mark ${t.title} done`}>{t.done ? <Check size={14} strokeWidth={3} /> : null}</button>
+      </form>
+      <div className="mini-main">
+        <span className="title">{t.title}</span>
+        <span className="mini-meta">
+          <span className="badge">{t.tag}</span>
+          {t.overdue ? <span className="badge danger">Overdue · {t.dueDate}</span> : null}
+          {t.dueTime !== null ? <span className="small muted">{fmtMinutes(t.dueTime)}</span> : null}
+        </span>
+      </div>
+    </li>
+  );
+}
 
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const user = await getCurrentUser();
   const { day: requested } = await searchParams;
-  const { routineId, routineName, events, dueTasks, today, day, student, routines, greeting, emoji } = await withUser(user!.id, async c => {
-    const { timezone } = await getSettings(c, user!.id);
-    const todayKey = dateKeyIn(timezone);
-    const dayKey = isDateKey(requested) ? requested : todayKey;
-    const ws = await personalWorkspaceId(c, user!.id);
+  const data = await withUser(user!.id, async c => {
     const settings = await getSettings(c, user!.id);
-    const routine = await routineForDay(c, ws, user!.id, weekdayOf(dayKey), dayKey);
-    const tasks = (await listTasks(c, ws)).filter(t =>
-      !t.done && t.dueDate !== null && (t.dueDate === dayKey || (dayKey === todayKey && t.dueDate < todayKey)));
-    let student = { classes: [] as { title: string; kind: string; start_min: number; end_min: number; room: string }[], deadlines: [] as { title: string; kind: string; due_date: string; due_time: number | null }[], exams: [] as { title: string; due_date: string }[] };
-    if (settings.studentEnabled && isPremium(settings)) {
-      student.classes = (await c.query(`select title, kind, start_min, end_min, room from classes where workspace_id = $1 and weekday = $2 and deleted_at is null order by start_min`, [ws, weekdayOf(dayKey)])).rows;
-      student.deadlines = (await c.query(`select title, kind, due_date::text as due_date, due_time from deadlines where workspace_id = $1 and done = false and deleted_at is null and (due_date = $2 or ($3 and due_date < $2)) order by due_date, coalesce(due_time, 1440)`, [ws, dayKey, dayKey === todayKey])).rows;
-      student.exams = (await c.query(`select title, due_date::text as due_date from deadlines where workspace_id = $1 and kind = 'exam' and done = false and deleted_at is null and due_date > $2 and due_date <= ($2::date + 14) order by due_date`, [ws, dayKey])).rows;
-    }
+    const today = dateKeyIn(settings.timezone);
+    const day = isDateKey(requested) ? requested : today;
+    const ws = await personalWorkspaceId(c, user!.id);
+    const premium = isPremium(settings);
+    const t = await loadToday(c, {
+      ws, userId: user!.id, day, today, tz: settings.timezone, premium,
+      student: settings.studentEnabled, workMode: settings.mode === 'work', budgetMinor: settings.monthlyBudgetMinor,
+    });
     const routines = await listRoutines(c, ws);
     const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: settings.timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
     const period = hour >= 5 && hour < 12 ? ['🌅', 'Good morning'] : hour < 17 ? ['☀️', 'Good afternoon'] : hour < 21 ? ['🌇', 'Good evening'] : ['🌙', 'Good night'];
-    return { ...routine, dueTasks: tasks, today: todayKey, day: dayKey, student, routines, greeting: `${period[1]}, ${(user!.name || 'buddy').split(' ')[0]}`, emoji: period[0] };
+    return { ...t, day, today, premium, routines, currency: settings.currency, workMode: settings.mode === 'work', greeting: `${period[1]}, ${(user!.name || 'buddy').split(' ')[0]}`, emoji: period[0] };
   });
 
-  const done = events.filter(e => e.done).length;
-  const percent = events.length ? Math.round((done / events.length) * 100) : 0;
-  const next = events.find(e => !e.done);
+  const { day, today, agenda, tasks, focus, notes, work, spend, premium, nowMin } = data;
+  const isToday = day === today;
+  const percent = data.routineTotal ? Math.round((data.routineDone / data.routineTotal) * 100) : 0;
+  const timed = agenda.filter(a => a.startMin !== null);
+  const untimed = agenda.filter(a => a.startMin === null);
+  const next = isToday ? timed.find(a => !a.done && a.kind !== 'focus' && (a.endMin ?? a.startMin!) >= (nowMin ?? 0)) : timed.find(a => !a.done && a.kind !== 'focus');
+  const nowIndex = nowMin === null ? -1 : timed.findIndex(a => (a.startMin ?? 0) > nowMin);
+  const openTasks = tasks.overdue.length + tasks.today.filter(t => !t.done).length;
+  const dayLabel = isToday ? 'today' : 'on this day';
 
   return (
     <>
       <div className="page-head">
         <div>
-          {day === today ? <Hero emoji={emoji} greeting={greeting} /> : <h1>{longDate(day)}</h1>}
-          <p>{routineName && routineId ? <>Routine: <Link className="routine-link" href={`/routines#routine-${routineId}`}>{routineName} ›</Link></> : 'No routine for this day'}</p>
+          {isToday ? <Hero emoji={data.emoji} greeting={data.greeting} /> : <h1>{longDate(day)}</h1>}
+          <p>
+            {isToday ? `${longDate(day)} · ` : ''}
+            {data.routineName && data.routineId ? <>Routine: <Link className="routine-link" href={`/routines#routine-${data.routineId}`}>{data.routineName} ›</Link></> : 'No routine for this day'}
+          </p>
         </div>
         <div className="actions">
-          <Link className="btn" href={`/today?day=${shiftDateKey(day, -1)}`}>‹ Previous</Link>
-          <Link className="btn" href="/today">Today</Link>
-          <Link className="btn" href={`/today?day=${shiftDateKey(day, 1)}`}>Next ›</Link>
+          <Link className="btn" href={`/today?day=${shiftDateKey(day, -1)}`} aria-label="Previous day">‹ Previous</Link>
+          {!isToday ? <Link className="btn" href="/today">Today</Link> : null}
+          <Link className="btn" href={`/today?day=${shiftDateKey(day, 1)}`} aria-label="Next day">Next ›</Link>
         </div>
       </div>
 
       <div className="stats">
         <div className="card stat">
-          <div className="label">Completed</div>
-          <div className="value num">{done} of {events.length}</div>
-        </div>
-        <div className="card stat">
-          <div className="label">Progress</div>
+          <div className="label">Routine</div>
           <div className="value num">{percent}%</div>
+          <div className="small muted">{data.routineDone} of {data.routineTotal} activities</div>
           <div className="progress"><span style={{ width: `${percent}%` }} /></div>
         </div>
-        <div className="card stat">
-          <div className="label">Tasks due</div>
-          <div className="value num">{dueTasks.length}</div>
-        </div>
-        <div className="card stat">
-          <div className="label">Next up</div>
-          <div className="value" style={{ fontSize: 18 }}>{next ? fmtMinutes(next.startMin) : '—'}</div>
-          <div className="small muted">{next ? next.title : 'Everything is done'}</div>
-        </div>
+        <Link href="/tasks" className="card stat stat-link">
+          <div className="label">To-do</div>
+          <div className="value num">{openTasks}</div>
+          <div className="small muted">{tasks.overdue.length ? <span style={{ color: 'var(--danger)' }}>{tasks.overdue.length} overdue · </span> : null}{tasks.doneToday} done {dayLabel}</div>
+        </Link>
+        <Link href="/focus" className="card stat stat-link">
+          <div className="label">Focus</div>
+          {premium ? (<><div className="value num">{hmText(focus.minutes)}</div><div className="small muted">{focus.sessions.length} {focus.sessions.length === 1 ? 'session' : 'sessions'} {dayLabel}</div></>)
+            : (<><div className="value"><Lock size={22} aria-hidden="true" /></div><div className="small muted">Premium feature</div></>)}
+        </Link>
+        {work ? (
+          <Link href="/work" className="card stat stat-link">
+            <div className="label">Time logged</div>
+            <div className="value num">{hmText(work.minutes)}</div>
+            <div className="small muted">{work.meetings} {work.meetings === 1 ? 'meeting' : 'meetings'}{work.timer ? ' · timer running' : ''}</div>
+          </Link>
+        ) : spend ? (
+          <Link href={`/spend?day=${day}`} className="card stat stat-link">
+            <div className="label">Spent {dayLabel}</div>
+            <div className="value num">{money(spend.totalMinor, data.currency)}</div>
+            <div className="small muted">{spend.count} {spend.count === 1 ? 'expense' : 'expenses'}</div>
+          </Link>
+        ) : (
+          <Link href="/notes" className="card stat stat-link">
+            <div className="label">Reminders</div>
+            <div className="value num">{notes.reminders.length}</div>
+            <div className="small muted">{notes.pinned.length} pinned notes</div>
+          </Link>
+        )}
       </div>
 
       <div className="layout-2">
         <section className="card flush">
           <div className="card-head">
-            <h2>Schedule</h2>
-            <span className="muted small">{events.length} activities</span>
+            <h2>Your day</h2>
+            <span className="legend-chips small muted">{agenda.length} items</span>
           </div>
-          {events.length === 0 ? (
-            <div className="empty">Nothing planned for this day. Add an activity to the routine.</div>
+          {agenda.length === 0 ? (
+            <div className="empty">Nothing planned {dayLabel}. Add an activity, a task with a time, or a meeting.</div>
           ) : (
-            <table className="table">
-              <thead>
-                <tr><th className="check-col" aria-label="Done" /><th>Time</th><th>Activity</th><th className="hide-sm">Category</th></tr>
-              </thead>
-              <tbody>
-                {events.map(e => (
-                  <tr key={e.id} className={e.done ? 'done' : ''}>
-                    <td className="check-col">
-                      <form action={toggleEvent}>
-                        <input type="hidden" name="eventId" value={e.id} />
-                        <input type="hidden" name="day" value={day} />
-                        <button type="submit" className={`check ${e.done ? 'on' : ''}`} aria-label={e.done ? `Undo ${e.title}` : `Mark ${e.title} done`}>
-                          {e.done ? '✓' : ''}
-                        </button>
-                      </form>
-                    </td>
-                    <td className="time">{fmtMinutes(e.startMin)} – {fmtMinutes(e.endMin)}</td>
-                    <td><span className="title">{e.emoji} {e.title}</span></td>
-                    <td className="hide-sm"><span className="badge">{e.category}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ol className="agenda">
+              {timed.map((a, i) => (
+                <li key={a.key} className="agenda-wrap">
+                  {i === nowIndex ? <div className="now-line" aria-label={`Now, ${fmtMinutes(nowMin!)}`}><span>Now · {fmtMinutes(nowMin!)}</span></div> : null}
+                  <div className={`agenda-item kind-${a.kind} ${a.done ? 'done' : ''}`}>
+                    <div className="agenda-time num">{fmtMinutes(a.startMin!)}{a.endMin !== null ? <span>{fmtMinutes(a.endMin)}</span> : null}</div>
+                    <div className="agenda-mark">{a.toggle ? <ToggleForm item={a} day={day} /> : <span className="agenda-icon" aria-hidden="true">{a.emoji}</span>}</div>
+                    <div className="agenda-main">
+                      <span className="title">{a.kind === 'routine' || a.kind === 'task' || a.kind === 'deadline' ? `${a.emoji} ` : ''}{a.title}</span>
+                      <span className="agenda-meta"><span className={`kind-chip kind-${a.kind}`}>{KIND_LABEL[a.kind]}</span><span className="small muted">{a.meta}</span></span>
+                    </div>
+                    {a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}
+                  </div>
+                </li>
+              ))}
+              {nowIndex === -1 && nowMin !== null && timed.length ? <li className="agenda-wrap"><div className="now-line"><span>Now · {fmtMinutes(nowMin)}</span></div></li> : null}
+              {untimed.length ? <li className="agenda-group">Anytime</li> : null}
+              {untimed.map(a => (
+                <li key={a.key} className="agenda-wrap">
+                  <div className={`agenda-item kind-${a.kind} ${a.done ? 'done' : ''}`}>
+                    <div className="agenda-time muted">—</div>
+                    <div className="agenda-mark">{a.toggle ? <ToggleForm item={a} day={day} /> : <span className="agenda-icon" aria-hidden="true">{a.emoji}</span>}</div>
+                    <div className="agenda-main">
+                      <span className="title">{a.title}</span>
+                      <span className="agenda-meta"><span className={`kind-chip kind-${a.kind}`}>{KIND_LABEL[a.kind]}</span><span className="small muted">{a.meta}</span></span>
+                    </div>
+                    {a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
           )}
+          <details className="panel agenda-add">
+            <summary><Plus size={15} aria-hidden="true" /> Add an activity to this routine</summary>
+            <form action={addEvent} className="form-grid">
+              <input type="hidden" name="day" value={day} />
+              <label className="field span-6">Title<input className="input" name="title" required maxLength={120} placeholder="e.g. Evening walk" /></label>
+              <label className="field span-2">Icon<input className="input" name="emoji" maxLength={8} placeholder="📌" /></label>
+              <label className="field span-2">Starts<input className="input" name="start" type="time" required /></label>
+              <label className="field span-2">Ends<input className="input" name="end" type="time" required /></label>
+              <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Add activity</button></div>
+            </form>
+          </details>
         </section>
 
         <div className="stack">
           {next ? (
             <section className="card next-up card-body">
-              <div className="small">Next up · {fmtMinutes(next.startMin)}</div>
-              <div style={{ fontSize: 18, fontWeight: 650, marginTop: 4 }}>{next.emoji} {next.title}</div>
-            </section>
-          ) : null}
-
-          {student.classes.length || student.deadlines.length || student.exams.length ? (
-            <section className="card flush">
-              <div className="card-head"><h2>Student</h2><Link className="small muted" href="/student">Open</Link></div>
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                {student.classes.map((c, i) => <li key={`c${i}`} className="card-body" style={{ borderTop: '1px solid var(--line)' }}><div style={{ fontWeight: 550 }}>📚 {c.title}</div><div className="small muted">{c.kind} · {fmtMinutes(c.start_min)} – {fmtMinutes(c.end_min)}{c.room ? ` · ${c.room}` : ''}</div></li>)}
-                {student.deadlines.map((d, i) => <li key={`d${i}`} className="card-body" style={{ borderTop: '1px solid var(--line)' }}><div style={{ fontWeight: 550 }}>{d.kind === 'exam' ? '📝' : '📌'} {d.title}</div><div className="small muted">{d.kind} · due {d.due_date}{d.due_time !== null ? ` ${fmtMinutes(d.due_time)}` : ''}</div></li>)}
-                {student.exams.map((x, i) => <li key={`x${i}`} className="card-body" style={{ borderTop: '1px solid var(--line)' }}><div style={{ fontWeight: 550 }}>⏳ {x.title}</div><div className="small muted">Exam on {x.due_date}</div></li>)}
-              </ul>
+              <div className="small">{isToday && nowMin !== null && next.startMin! <= nowMin ? 'Happening now' : 'Next up'} · {fmtMinutes(next.startMin!)}{next.kind !== 'routine' ? ` · ${KIND_LABEL[next.kind]}` : ''}</div>
+              <div className="next-title">{next.emoji} {next.title}</div>
             </section>
           ) : null}
 
           <section className="card flush">
-            <div className="card-head">
-              <h2>Tasks due</h2>
-              <Link className="small muted" href="/tasks">View all</Link>
-            </div>
-            {dueTasks.length === 0 ? (
-              <div className="empty">No tasks due {day === today ? 'today' : 'on this day'}.</div>
+            <div className="card-head"><h2>To-do</h2><Link href="/tasks">All tasks</Link></div>
+            <form action={addTask} className="quick-add">
+              <input type="hidden" name="dueDate" value={day} />
+              <input className="input" name="title" required maxLength={120} placeholder={`Add a task for ${isToday ? 'today' : longDate(day)}`} aria-label="New task" />
+              <input className="input quick-time" name="dueTime" type="time" aria-label="Time (optional)" />
+              <button className="btn primary" type="submit" aria-label="Add task"><Plus size={16} /></button>
+            </form>
+            {tasks.overdue.length + tasks.today.length + tasks.anytime.length === 0 ? (
+              <div className="mini-empty">No tasks {dayLabel}. Nice and clear.</div>
             ) : (
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                {dueTasks.map(t => (
-                  <li key={t.id} className="card-body" style={{ borderTop: '1px solid var(--line)' }}>
-                    <div style={{ fontWeight: 550 }}>{t.title}</div>
-                    <div className="small muted">
-                      <span className="badge">{t.tag}</span>{t.dueTime !== null ? ` · ${fmtMinutes(t.dueTime)}` : ''}
-                    </div>
-                  </li>
+              <>
+                {tasks.overdue.length ? <><div className="mini-group danger">Overdue</div><ul className="mini-list">{tasks.overdue.map(t => <TaskRow key={t.id} t={t} />)}</ul></> : null}
+                {tasks.today.length ? <><div className="mini-group">Due {dayLabel}</div><ul className="mini-list">{tasks.today.map(t => <TaskRow key={t.id} t={t} />)}</ul></> : null}
+                {tasks.anytime.length ? <><div className="mini-group">No date</div><ul className="mini-list">{tasks.anytime.map(t => <TaskRow key={t.id} t={t} />)}</ul></> : null}
+              </>
+            )}
+          </section>
+
+          {premium ? (
+            <section className="card flush">
+              <div className="card-head"><h2><Timer size={16} aria-hidden="true" className="h-icon" /> Focus</h2><Link href="/focus">Open timer</Link></div>
+              <div className="card-body">
+                <div className="split-stat"><strong className="num">{hmText(focus.minutes)}</strong><span className="small muted">{focus.sessions.length ? `in ${focus.sessions.length} ${focus.sessions.length === 1 ? 'session' : 'sessions'}` : `No focus sessions ${dayLabel} yet`}</span></div>
+                {focus.sessions.length ? (
+                  <ul className="mini-list plain">
+                    {focus.sessions.map((s, i) => <li key={i} className="mini-row"><span className="small muted num">{fmtMinutes(s.atMin)}</span><span className="mini-main">{s.title || 'Focus session'}</span><span className="badge">{s.minutes} min</span></li>)}
+                  </ul>
+                ) : null}
+                {isToday ? <Link href="/focus" className="btn block" style={{ marginTop: 12 }}><Timer size={16} aria-hidden="true" /> Start a focus session</Link> : null}
+              </div>
+            </section>
+          ) : null}
+
+          {work ? (
+            <section className="card flush">
+              <div className="card-head"><h2><Briefcase size={16} aria-hidden="true" className="h-icon" /> Work</h2><Link href="/work">Open</Link></div>
+              <div className="card-body stack" style={{ gap: 12 }}>
+                {work.timer ? (
+                  <div className="timer-strip">
+                    <span className="focus-dot on" aria-hidden="true" />
+                    <div className="mini-main"><strong>{work.timer.project}</strong><span className="small muted">{work.timer.note || 'Timer running'}</span></div>
+                    <strong className="num"><Elapsed startedAt={work.timer.startedAt} /></strong>
+                    <form action={stopTimer}><button className="btn sm" type="submit">Stop</button></form>
+                  </div>
+                ) : null}
+                <div className="kv-grid">
+                  <div><span className="small muted">Logged</span><strong className="num">{hmText(work.minutes)}</strong></div>
+                  <div><span className="small muted">Billable</span><strong className="num">{hmText(work.billableMinutes)}</strong></div>
+                  <div><span className="small muted">Meetings</span><strong className="num">{work.meetings}</strong></div>
+                  <div><span className="small muted">Open actions</span><strong className="num">{work.openActions}</strong></div>
+                </div>
+                {!work.timer && isToday ? <Link href="/work" className="btn block">Start a timer</Link> : null}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="card flush">
+            <div className="card-head"><h2><NotebookPen size={16} aria-hidden="true" className="h-icon" /> Notes</h2><Link href="/notes/new">New note</Link></div>
+            {notes.reminders.length + notes.pinned.length === 0 ? (
+              <div className="mini-empty">Pin a note or set a reminder and it shows here.</div>
+            ) : (
+              <ul className="mini-list">
+                {notes.reminders.map(r => (
+                  <li key={`r${r.id}`} className="mini-row"><Bell size={15} aria-hidden="true" className="mini-ico warn" />
+                    <Link href={`/notes?id=${r.id}`} className="mini-main"><span className="title">{r.title}</span><span className="small muted">Reminder at {fmtMinutes(r.atMin)}</span></Link></li>
+                ))}
+                {notes.pinned.map(n => (
+                  <li key={`p${n.id}`} className="mini-row"><Pin size={15} aria-hidden="true" className="mini-ico" />
+                    <Link href={`/notes?id=${n.id}`} className="mini-main"><span className="title">{n.title}</span>{n.snippet ? <span className="small muted clamp-1">{n.snippet}</span> : null}</Link></li>
                 ))}
               </ul>
             )}
           </section>
 
-          <details className="card panel">
-            <summary className="card-body"><strong>+ Add an activity</strong></summary>
-            <form action={addEvent} className="form-grid" style={{ padding: '0 18px 18px' }}>
-              <input type="hidden" name="day" value={day} />
-              <label className="field span-12">Title<input className="input" name="title" required maxLength={120} placeholder="e.g. Evening walk" /></label>
-              <label className="field span-3">Icon<input className="input" name="emoji" maxLength={8} placeholder="📌" /></label>
-              <label className="field span-4">Starts<input className="input" name="start" type="time" required /></label>
-              <label className="field span-4">Ends<input className="input" name="end" type="time" required /></label>
-              <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button className="btn primary" type="submit">Add activity</button>
+          {spend ? (
+            <section className="card flush">
+              <div className="card-head"><h2><Wallet size={16} aria-hidden="true" className="h-icon" /> Spending</h2><Link href={`/spend?day=${day}`}>Add expense</Link></div>
+              <div className="card-body">
+                <div className="kv-grid">
+                  <div><span className="small muted">{isToday ? 'Today' : 'This day'}</span><strong className="num">{money(spend.totalMinor, data.currency)}</strong></div>
+                  <div><span className="small muted">This month</span><strong className="num">{money(spend.monthMinor, data.currency)}</strong></div>
+                </div>
+                {spend.budgetMinor ? (
+                  <>
+                    <div className="progress" title="Monthly budget used"><span style={{ width: `${Math.min(100, Math.round((spend.monthMinor / spend.budgetMinor) * 100))}%`, background: spend.monthMinor > spend.budgetMinor ? 'var(--danger)' : undefined }} /></div>
+                    <div className="small muted" style={{ marginTop: 6 }}>{Math.round((spend.monthMinor / spend.budgetMinor) * 100)}% of {money(spend.budgetMinor, data.currency)} budget</div>
+                  </>
+                ) : null}
               </div>
-            </form>
-          </details>
+            </section>
+          ) : null}
+
+          {!premium ? (
+            <section className="card card-body upsell">
+              <strong>See your whole day in one place</strong>
+              <p className="small muted">Premium adds focus sessions, meetings, time tracking, classes and spending to Today.</p>
+              <Link href="/settings#plan" className="btn primary sm">Try Premium free</Link>
+            </section>
+          ) : null}
         </div>
       </div>
 
       <section className="card flush" style={{ marginTop: 20 }}>
         <div className="card-head">
           <h2>Routines</h2>
-          <Link className="small muted" href="/routines">Manage ›</Link>
+          <Link href="/routines">Manage ›</Link>
         </div>
-        {routines.length === 0 ? <div className="empty">No routines yet.</div> : (
+        {data.routines.length === 0 ? <div className="empty">No routines yet.</div> : (
           <ul className="routine-list">
-            {routines.map(r => (
+            {data.routines.map(r => (
               <li key={r.id} className="routine-row">
                 <span className="routine-dot" style={{ background: r.color }} aria-hidden="true" />
                 <div className="routine-name">
