@@ -3,6 +3,10 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  experimental: {
+    // Load only the icons each page uses, which makes pages faster to open.
+    optimizePackageImports: ['lucide-react'],
+  },
   async headers() {
     return [{
       source: '/sw.js',

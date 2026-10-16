@@ -14,8 +14,8 @@ if (process.env.NODE_ENV !== 'production') globalForPg.pool = pool;
 export async function withUser<T>(userId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    await client.query("select set_config('app.user_id', $1, true)", [userId]);
+    // BEGIN and the user setting go in one round trip (the user id is escaped, not interpolated raw).
+    await client.query(`BEGIN; select set_config('app.user_id', ${client.escapeLiteral(userId)}, true)`);
     const result = await fn(client);
     await client.query('COMMIT');
     return result;

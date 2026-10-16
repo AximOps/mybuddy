@@ -8,17 +8,14 @@ import { TrialBanner } from '@/components/TrialBanner';
 import { FocusProvider } from '@/components/focus/FocusProvider';
 import { FocusBall } from '@/components/focus/FocusBall';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
-import { withUser } from '@/lib/db';
-import { isPlatformAdmin } from '@/lib/admin';
-import { getSettings } from '@/lib/settings';
+import { getAppContext } from '@/lib/app-context';
 import { isPremium } from '@/lib/entitlements';
-import { getCurrentUser } from '@/lib/session';
 import { APP_TZ } from '@/lib/time';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
-  const { settings, admin } = await withUser(user.id, async c => ({ settings: await getSettings(c, user.id), admin: await isPlatformAdmin(c, user.id) }));
+  const ctx = await getAppContext();
+  if (!ctx) redirect('/login');
+  const { user, settings, admin } = ctx;
   if (!settings.onboarded) redirect('/welcome');
   // Subscribe reminders: from day 10 of the trial (5 days left), and for a week after it ends.
   const untilMs = settings.planUntil ? Date.parse(settings.planUntil) : null;

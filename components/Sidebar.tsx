@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Lock, Sparkles, BarChart3, Briefcase, CalendarDays, CalendarRange, GraduationCap, ListChecks, NotebookPen, Timer, Users, Wallet } from 'lucide-react';
 import { BrandLockup } from './BuddyLogo';
+import { NavLink } from './NavLink';
 
 const ITEMS = [
   { href: '/today', label: 'Today', icon: CalendarDays },
@@ -33,11 +34,11 @@ export function Sidebar({ showStudent, showWork, premium, trialUntil = null }: {
           {items.map(item => {
             const Icon = item.icon;
             return (
-              <Link key={item.href} href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+              <NavLink key={item.href} href={item.href} active={isActive(item.href)}>
                 <Icon size={18} strokeWidth={1.9} aria-hidden="true" />
                 {item.label}
                 {!premium && PREMIUM_HREFS.includes(item.href) ? <Lock size={13} strokeWidth={2.2} aria-label="Premium" className="lock-icon" /> : null}
-              </Link>
+              </NavLink>
             );
           })}
         </nav>
@@ -68,10 +69,10 @@ export function Sidebar({ showStudent, showWork, premium, trialUntil = null }: {
         {items.map(item => {
           const Icon = item.icon;
           return (
-            <Link key={item.href} href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+            <NavLink key={item.href} href={item.href} active={isActive(item.href)}>
               <Icon size={20} strokeWidth={1.9} aria-hidden="true" />
               <span>{item.label}</span>
-            </Link>
+            </NavLink>
           );
         })}
       </nav>
