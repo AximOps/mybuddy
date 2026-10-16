@@ -29,8 +29,8 @@
   cannot install the app.
 
 ## Icon picker (added with v19)
-- Activities on Today and new activities in the routine editor show 50 icons to tap, grouped by use,
-  plus a box to type your own emoji. The old text box is replaced.
+- The icon is chosen from a dropdown. It shows the current icon, and opens a panel of 50 icons plus a box
+  to type your own emoji. It closes after a pick, on a click elsewhere, or with Escape.
 
 ## Navigation (added with v19)
 - **Week** moved out of the sidebar. It is a button in Today's header, next to Previous, Today and Next.
