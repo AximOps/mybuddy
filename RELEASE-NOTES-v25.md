@@ -53,7 +53,7 @@ A link can open a tab directly, for example `/focus?tab=alarm`. A green dot on a
   on the first tap.
 
 ## Files
-- New: `components/focus/FocusDial.tsx`, `FocusTools.tsx`, `ToolsProvider.tsx`, `ToolAlert.tsx`, `sound.ts`.
+- New: `components/focus/FocusDial.tsx`, `FocusTools.tsx`, `ToolsProvider.tsx`, `ToolAlert.tsx`, `sound.ts`, `lib/focus-tabs.ts`.
 - Changed: `app/(app)/focus/page.tsx`, `app/(app)/layout.tsx` (mounts the tools engine and pop-up),
   `components/FocusTimer.tsx`, `components/focus/FocusBall.tsx`, `components/focus/FocusProvider.tsx`,
   `app/actions.ts` (`addQuickReminder`, `removeReminder`; `recordFocusSession` now returns true or false),
@@ -65,3 +65,11 @@ A link can open a tab directly, for example `/focus?tab=alarm`. A green dot on a
 3. Focus → Alarm: set a one-time alarm two minutes ahead and check that it rings, snoozes and stops.
 4. Focus → Stopwatch: run it for a minute, add laps, pause, then log it and check Stats.
 5. Focus → Reminders: add "in 5 min" and check that it appears on Today and rings at the time.
+
+## Fix (v25.1)
+- The Focus page failed to open with `TypeError: FOCUS_TABS.some is not a function`. The server page
+  imported the tab list from a client component file, and on the server that import is only a reference,
+  not the real list. The tab list now lives in `lib/focus-tabs.ts`, which both the server page and the
+  client code import.
+- Checked against a real Postgres database with a signed-in Premium account: all five tabs open, the timer
+  starts, the floating timer shows on Today, reminders are added and removed, and stopwatch time saves to Stats.

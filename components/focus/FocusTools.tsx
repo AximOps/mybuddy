@@ -8,8 +8,9 @@ import { FocusDial } from './FocusDial';
 import { nextAlarmAt, swElapsed, useTools, type Alarm } from './ToolsProvider';
 import { SOUNDS, type SoundId } from './sound';
 
-export type FocusTab = 'timer' | 'breaks' | 'alarm' | 'stopwatch' | 'reminders';
-export const FOCUS_TABS: { id: FocusTab; label: string; icon: typeof Timer }[] = [
+import type { FocusTab } from '@/lib/focus-tabs';
+
+const FOCUS_TABS: { id: FocusTab; label: string; icon: typeof Timer }[] = [
   { id: 'timer', label: 'Timer', icon: Timer },
   { id: 'breaks', label: 'Breaks', icon: Coffee },
   { id: 'alarm', label: 'Alarm', icon: AlarmClock },

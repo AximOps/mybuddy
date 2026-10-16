@@ -1,4 +1,5 @@
-import { FocusTools, FOCUS_TABS, type FocusTab, type ReminderRow } from '@/components/focus/FocusTools';
+import { FocusTools, type ReminderRow } from '@/components/focus/FocusTools';
+import { isFocusTab, type FocusTab } from '@/lib/focus-tabs';
 import { PremiumGate } from '@/components/PremiumGate';
 import { withUser } from '@/lib/db';
 import { personalWorkspaceId } from '@/lib/planner';
@@ -54,6 +55,6 @@ async function FocusPageContent({ taskId, tab }: { taskId: string | null; tab: F
 
 export default async function FocusPage({ searchParams }: { searchParams: Promise<{ task?: string; tab?: string }> }) {
   const { task, tab } = await searchParams;
-  const current = FOCUS_TABS.some(t => t.id === tab) ? tab as FocusTab : 'timer';
+  const current: FocusTab = isFocusTab(tab) ? tab : 'timer';
   return <PremiumGate feature="Focus tools"><FocusPageContent taskId={isUuid(task) ? task : null} tab={current} /></PremiumGate>;
 }
