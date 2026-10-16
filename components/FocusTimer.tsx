@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Coffee, Pause, Play, SkipForward, Square, Timer } from 'lucide-react';
 import { clock, useFocus, type FocusMode } from './focus/FocusProvider';
+import { FocusDial } from './focus/FocusDial';
 
 const DURATIONS = [5, 15, 30, 45, 60, 90, 120];
 const BREAKS = [5, 10, 15, 30];
@@ -13,7 +14,7 @@ const DEFAULT_PREFS: Prefs = { mode: 'single', focusMin: 30, breakMin: 5, rounds
 const clampMin = (n: number, max = 480) => Math.max(1, Math.min(max, Math.round(n) || 1));
 
 /** Preset buttons plus a "Custom" button that opens a minutes field. */
-function MinutePicker({ label, presets, value, onChange, max = 480, unit = 'min' }: { label: string; presets: number[]; value: number; onChange: (n: number) => void; max?: number; unit?: string }) {
+export function MinutePicker({ label, presets, value, onChange, max = 480, unit = 'min' }: { label: string; presets: number[]; value: number; onChange: (n: number) => void; max?: number; unit?: string }) {
   const [custom, setCustom] = useState(!presets.includes(value));
   useEffect(() => { if (!presets.includes(value)) setCustom(true); }, [value, presets]);
   return (
@@ -91,7 +92,6 @@ export function FocusTimer({ task = null }: { task?: { id: string; title: string
     );
   }
 
-  const R = 120, C = 2 * Math.PI * R;
   const isBreak = session.phase === 'break';
   return (
     <section className={`card card-body focus-run ${isBreak ? 'is-break' : ''}`} style={{ maxWidth: 560 }}>
@@ -101,16 +101,12 @@ export function FocusTimer({ task = null }: { task?: { id: string; title: string
         {session.mode === 'pomodoro' ? ` · Round ${session.round} of ${session.rounds}` : ''}
         {session.title && !isBreak ? ` · ${session.title}` : ''}
       </div>
-      <div className="focus-ring">
-        <svg viewBox="0 0 280 280" aria-hidden="true">
-          <circle cx="140" cy="140" r={R} className="focus-ring-track" />
-          <circle cx="140" cy="140" r={R} className="focus-ring-fill" strokeDasharray={C} strokeDashoffset={C * (1 - progress)} />
-        </svg>
-        <div className="focus-center">
+      <div className="focus-stage">
+        <FocusDial progress={progress} state={!running ? 'paused' : isBreak ? 'break' : 'running'}>
           {isBreak ? <Coffee size={22} aria-hidden="true" className="focus-break-icon" /> : null}
-          <div className="focus-dial" aria-live="polite">{clock(remaining)}</div>
-          <span className="small muted">{isBreak ? `Next: round ${session.round + 1}` : `${session.focusMin} min ${session.mode === 'pomodoro' ? 'round' : 'focus'}`}</span>
-        </div>
+          <div className="focus-dial num" aria-live="polite">{clock(remaining)}</div>
+          <span className="fdial-sub">{!running ? 'paused' : isBreak ? `break · next round ${session.round + 1}` : session.mode === 'pomodoro' ? `focus ${session.round}/${session.rounds}` : 'focus'}</span>
+        </FocusDial>
       </div>
       {session.mode === 'pomodoro' ? (
         <div className="round-dots" aria-label={`Round ${session.round} of ${session.rounds}`}>

@@ -297,6 +297,44 @@ export async function deleteNote(formData: FormData) {
   redirect('/notes');
 }
 
+/* ---------- Quick reminders (Focus page) ----------
+   A quick reminder is a note with a reminder time, so it shows on Today, in Notes, in the calendar
+   feed and on the mobile app like any other note reminder. */
+
+const QUICK_REMINDER = 'web-quick-reminder';
+
+export async function addQuickReminder(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  const title = text(formData.get('title'), 200);
+  if (!title) return { ok: false, error: 'Write what to remind you about.' };
+  const inMin = Number(formData.get('inMin'));
+  const atRaw = String(formData.get('at') ?? '');
+  return withUser(user.id, async c => {
+    const settings = await getSettings(c, user.id);
+    const atMs = Number.isInteger(inMin) && inMin > 0 && inMin <= 7 * 24 * 60 ? Date.now() + inMin * 60_000 : atRaw ? zonedToUtc(atRaw, settings.timezone) : NaN;
+    if (Number.isNaN(atMs)) return { ok: false, error: 'Pick a time.' };
+    if (atMs < Date.now() - 60_000) return { ok: false, error: 'That time has already passed.' };
+    if (atMs > Date.now() + 366 * 86_400_000) return { ok: false, error: 'Pick a time within the next year.' };
+    const ws = await personalWorkspaceId(c, user.id);
+    await c.query(
+      `insert into notes (id, workspace_id, title, body, tag, pinned, reminder_at, created_by, device_id) values ($1, $2, $3, '', 'Personal', false, $4, $5, $6)`,
+      [randomUUID(), ws, title, new Date(atMs).toISOString(), user.id, QUICK_REMINDER]);
+    revalidatePath('/focus'); revalidatePath('/today'); revalidatePath('/notes');
+    return { ok: true };
+  });
+}
+
+/** Removes a reminder. A quick reminder note that was never given text goes; any other note just loses its reminder time. */
+export async function removeReminder(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    await c.query(`update notes set deleted_at = case when body = '' and device_id = $2 then now() else deleted_at end, reminder_at = null, updated_at = now() where id = $1 and deleted_at is null`, [id, QUICK_REMINDER]);
+  });
+  revalidatePath('/focus'); revalidatePath('/today'); revalidatePath('/notes');
+}
+
 /* ---------- Routines ---------- */
 
 const COLOR = /^#[0-9a-f]{6}$/i;
@@ -427,14 +465,14 @@ export async function deleteActivity(formData: FormData) {
 /* ---------- Focus ---------- */
 
 /** Records a focus session that finished in the browser. */
-export async function recordFocusSession(formData: FormData) {
+export async function recordFocusSession(formData: FormData): Promise<boolean> {
   const user = await requireUser();
-  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return false; // premium only
   const title = text(formData.get('title'), 60);
   const minutes = Number(formData.get('minutes'));
   const taskId = String(formData.get('taskId') ?? '');
   const completeTask = formData.get('completeTask') === 'true';
-  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 480) return;
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 480) return false;
   await withUser(user.id, async c => {
     const ws = await workspaceFor(c, user.id);
     const linked = isUuid(taskId) ? taskId : null;
@@ -449,6 +487,7 @@ export async function recordFocusSession(formData: FormData) {
   revalidatePath('/stats');
   revalidatePath('/today');
   revalidatePath('/tasks');
+  return true;
 }
 
 /* ---------- Settings ---------- */

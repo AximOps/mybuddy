@@ -7,6 +7,8 @@ import { Notifier } from '@/components/Notifier';
 import { TrialBanner } from '@/components/TrialBanner';
 import { FocusProvider } from '@/components/focus/FocusProvider';
 import { FocusBall } from '@/components/focus/FocusBall';
+import { ToolsProvider } from '@/components/focus/ToolsProvider';
+import { ToolAlertOverlay } from '@/components/focus/ToolAlert';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { getAppContext } from '@/lib/app-context';
 import { isPremium } from '@/lib/entitlements';
@@ -27,6 +29,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const dayMonth = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', timeZone: APP_TZ });
   return (
     <FocusProvider>
+    <ToolsProvider premium={isPremium(settings)}>
     <div className="app">
       <Sidebar showStudent={settings.studentEnabled && isPremium(settings)} showWork={settings.mode === 'work' && isPremium(settings)} showTeam={settings.mode !== 'personal'} premium={isPremium(settings)} trialUntil={settings.trialActive ? settings.planUntil : null} />
       <div className="main">
@@ -42,8 +45,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         <div className="content">{children}</div>
         <Notifier />
         <FocusBall />
+        <ToolAlertOverlay />
       </div>
     </div>
+    </ToolsProvider>
     </FocusProvider>
   );
 }
