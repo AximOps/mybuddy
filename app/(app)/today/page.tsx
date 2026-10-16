@@ -35,6 +35,10 @@ function ToggleForm({ item, day }: { item: AgendaItem; day: string }) {
   );
 }
 
+function DonePill() {
+  return <span className="done-pill"><Check size={13} strokeWidth={3} aria-hidden="true" /> Done</span>;
+}
+
 function CheckForm({ kind, id, day, done, title }: { kind: 'note' | 'reminder'; id: string; day: string; done: boolean; title: string }) {
   return (
     <form action={toggleDayCheck}>
@@ -60,7 +64,7 @@ function TaskRow({ t }: { t: TodayTask }) {
           {t.repeat !== 'none' ? <span className="badge accent">↻ {repeatLabel(t.repeat)}</span> : null}
         </span>
       </div>
-      {!t.done ? <Link href={`/focus?task=${t.id}`} className="agenda-link" aria-label={`Focus on ${t.title}`} title="Focus on this"><Timer size={15} /></Link> : null}
+      {t.done ? <DonePill /> : <Link href={`/focus?task=${t.id}`} className="agenda-link" aria-label={`Focus on ${t.title}`} title="Focus on this"><Timer size={15} /></Link>}
     </li>
   );
 }
@@ -177,7 +181,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       <span className="title">{a.kind === 'routine' || a.kind === 'task' || a.kind === 'deadline' ? `${a.emoji} ` : ''}{a.title}</span>
                       <span className="agenda-meta"><span className={`kind-chip kind-${a.kind}`}>{KIND_LABEL[a.kind]}</span><span className="small muted">{a.meta}</span>{a.streak && a.streak >= 2 ? <span className="streak-chip" title={`${a.streak} scheduled days in a row`}>🔥 {a.streak}</span> : null}</span>
                     </div>
-                    {a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}
+                    <div className="agenda-end">{a.done ? <DonePill /> : null}{a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}</div>
                   </div>
                 </li>
               ))}
@@ -192,7 +196,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       <span className="title">{a.title}</span>
                       <span className="agenda-meta"><span className={`kind-chip kind-${a.kind}`}>{KIND_LABEL[a.kind]}</span><span className="small muted">{a.meta}</span></span>
                     </div>
-                    {a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}
+                    <div className="agenda-end">{a.done ? <DonePill /> : null}{a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}</div>
                   </div>
                 </li>
               ))}
@@ -304,11 +308,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               <ul className="mini-list">
                 {notes.reminders.map(r => (
                   <li key={`r${r.id}`} className={`mini-row ${r.done ? 'done' : ''}`}><CheckForm kind="reminder" id={r.id} day={day} done={r.done} title={r.title} />
-                    <Link href={`/notes?id=${r.id}`} className="mini-main"><span className="title">{r.title}</span><span className="small muted"><Bell size={12} aria-hidden="true" className="mini-ico warn" /> Reminder at {fmtMinutes(r.atMin)}</span></Link></li>
+                    <Link href={`/notes?id=${r.id}`} className="mini-main"><span className="title">{r.title}</span><span className="small muted"><Bell size={12} aria-hidden="true" className="mini-ico warn" /> Reminder at {fmtMinutes(r.atMin)}</span></Link>{r.done ? <DonePill /> : null}</li>
                 ))}
                 {notes.pinned.map(n => (
                   <li key={`p${n.id}`} className={`mini-row ${n.done ? 'done' : ''}`}><CheckForm kind="note" id={n.id} day={day} done={n.done} title={n.title} />
-                    <Link href={`/notes?id=${n.id}`} className="mini-main"><span className="title"><Pin size={12} aria-hidden="true" className="mini-ico" /> {n.title}</span>{n.snippet ? <span className="small muted clamp-1">{n.snippet}</span> : null}</Link></li>
+                    <Link href={`/notes?id=${n.id}`} className="mini-main"><span className="title"><Pin size={12} aria-hidden="true" className="mini-ico" /> {n.title}</span>{n.snippet ? <span className="small muted clamp-1">{n.snippet}</span> : null}</Link>{n.done ? <DonePill /> : null}</li>
                 ))}
               </ul>
             )}
