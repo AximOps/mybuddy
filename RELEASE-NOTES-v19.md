@@ -20,3 +20,10 @@
   previous deployment after a few days of traffic.
 - Click through Today → To-Do → Notes → Stats on a phone and a laptop. The spinner should appear at once,
   and the page should follow quickly.
+
+## Install banner (added with v19)
+- A banner at the top of Today offers to add My Buddy to the home screen.
+- Chrome, Edge and Android show an **Install app** button. iPhone and iPad show four steps for Safari,
+  and a **Copy app link** button.
+- It hides once the app is installed, after **Dismiss** (for 14 days), and on desktop browsers that
+  cannot install the app.

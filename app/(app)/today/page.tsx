@@ -4,6 +4,7 @@ import { addEvent, addTask, moveUnfinishedTasks, setTaskDone, stopTimer, toggleD
 import { withUser } from '@/lib/db';
 import { listRoutines, personalWorkspaceId } from '@/lib/planner';
 import { Hero } from '@/components/Hero';
+import { InstallNotice } from '@/components/InstallNotice';
 import { Elapsed } from '@/components/work/Elapsed';
 import { getCurrentUser } from '@/lib/session';
 import { fmtMinutes, dateKeyIn, isDateKey, longDate, shiftDateKey } from '@/lib/time';
@@ -106,6 +107,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
+      <InstallNotice />
       <div className="page-head">
         <div>
           {isToday ? <Hero emoji={data.emoji} greeting={data.greeting} /> : <h1>{longDate(day)}</h1>}
