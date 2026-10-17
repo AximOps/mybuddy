@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth';
+import { bearer } from 'better-auth/plugins';
 import { pool } from './db';
 
 const google = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -12,6 +13,11 @@ const apple = process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   database: pool,
+  // The Amiroon phone app signs in with the same accounts. It keeps the session token from the
+  // sign-in reply and sends it as "Authorization: Bearer <token>" (the bearer plugin).
+  plugins: [bearer()],
+  // The phone app's link schemes, so its requests pass the origin check.
+  trustedOrigins: ['amiroon://', 'mybuddy://'],
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,

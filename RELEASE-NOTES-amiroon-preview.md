@@ -43,3 +43,13 @@ On phones it opens as a sheet from the bottom of the screen.
 - **Student:** add a class, an assignment or exam, or a subject.
 - **Work:** add a project or a meeting.
 The add forms already on these pages stay where they are. New file: `components/AddDialog.tsx`. No migration.
+
+## Sign-in for the Amiroon phone app
+- The phone app now signs up and logs in with the same accounts as the website.
+- `lib/auth.ts` adds Better Auth's `bearer` plugin. The app keeps the session token from the sign-in reply and
+  sends it as `Authorization: Bearer <token>`. It also adds the app's link schemes (`amiroon://`, `mybuddy://`) as
+  trusted origins.
+- New `GET /api/mobile/me` returns the signed-in person's name and email, plus their mode, plan, trial and time zone.
+- Existing pages that read the session, such as `/api/upcoming`, also accept the bearer token.
+- No migration. Website cookies and sign-in work as before.
+- For Google sign-in in the app, the server's Google settings must accept the app's Google client IDs.
