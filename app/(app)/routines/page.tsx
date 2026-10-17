@@ -1,4 +1,5 @@
 import { IconPicker } from '@/components/IconPicker';
+import { AddDialog } from '@/components/AddDialog';
 import { addActivity, copyRoutine, createRoutine, deleteActivity, deleteRoutine, setRoutineDay, updateActivity, updateRoutine } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { listRoutines, personalWorkspaceId } from '@/lib/planner';
@@ -82,7 +83,23 @@ export default async function RoutinesPage() {
             </div>
 
             {r.events.length === 0 ? (
-              <div className="empty">No activities yet.</div>
+              <AddDialog title={`Add an activity to ${r.name}`} label={`Add an activity to ${r.name}`} text="No activities yet. Tap + to add one.">
+              <form action={addActivity} className="form-grid">
+                <input type="hidden" name="routineId" value={r.id} />
+                <label className="field span-4">Activity<input className="input" name="title" required maxLength={120} /></label>
+                <div className="span-12"><IconPicker /></div>
+                <label className="field span-2">Starts<input className="input" type="time" name="start" required /></label>
+                <label className="field span-2">Ends<input className="input" type="time" name="end" required /></label>
+                <label className="field span-2">Category
+                  <select className="select" name="category" defaultValue="personal">
+                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </label>
+                <div className="span-1" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button className="btn primary" type="submit">Add</button>
+                </div>
+              </form>
+              </AddDialog>
             ) : (
               <table className="table">
                 <thead><tr><th>Edit activities</th></tr></thead>

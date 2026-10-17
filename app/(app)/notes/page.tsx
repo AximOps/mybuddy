@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AddDialog } from '@/components/AddDialog';
 import { createNote, deleteNote, updateNote } from '@/app/actions';
 import { NoteForm } from '@/components/NoteForm';
 import { withUser } from '@/lib/db';
@@ -33,6 +34,21 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
   });
   const keep = query ? `&q=${encodeURIComponent(query)}` : '';
 
+  const quickNote = (
+    <form action={createNote} className="form-grid">
+      <label className="field span-12">Title<input className="input" name="title" maxLength={200} placeholder="e.g. Gift ideas" /></label>
+      <label className="field span-12">Note<textarea name="body" rows={5} placeholder="Start writing…" /></label>
+      <label className="field span-6">Tag
+        <select className="select" name="tag" defaultValue="Personal">
+          {data.tags.map(t => <option key={t}>{t}</option>)}
+        </select>
+      </label>
+      <label className="field span-6">Remind me at (optional)<input className="input" type="datetime-local" name="reminderAt" /></label>
+      <label className="check-row span-6" style={{ alignSelf: 'center' }}><input type="checkbox" name="pinned" /> Pin to top</label>
+      <div className="span-6" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Save note</button></div>
+    </form>
+  );
+
   return (
     <>
       <div className="page-head">
@@ -51,7 +67,8 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
       <section className="card split">
         <div className="list-pane">
           {data.notes.length === 0 ? (
-            <div className="empty">{query ? 'No notes match your search.' : 'No notes yet.'}</div>
+            query ? <div className="empty">No notes match your search.</div>
+              : <AddDialog title="New note" label="Add a note" text="No notes yet. Tap + to write one.">{quickNote}</AddDialog>
           ) : data.notes.map(n => (
             <Link key={n.id} href={`/notes?id=${n.id}${keep}`} className="note-item" aria-current={data.selected?.id === n.id ? 'true' : undefined}>
               <strong>{n.pinned ? '📌 ' : ''}{n.title || 'Untitled'}</strong>
@@ -73,7 +90,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
               </form>
             </>
           ) : (
-            <div className="empty" style={{ paddingTop: 120 }}>Select a note on the left, or create a new one.</div>
+            <AddDialog title="New note" label="Add a note" text="Select a note on the left, or tap + to write a new one." style={{ paddingTop: 120 }}>{quickNote}</AddDialog>
           )}
         </div>
       </section>

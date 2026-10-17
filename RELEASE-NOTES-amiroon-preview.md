@@ -30,3 +30,16 @@ Everything else is the same. No database migration beyond v27.1.
 - `MAIL_FROM` in Vercel (for example "Amiroon <hello@yourdomain.com>").
 - The domain, app store listings, the mobile app's name and splash screen, and the Google and Apple sign-in
   consent screen names.
+
+## The "+" in empty lists now adds things
+Before this change, the "+" shown in an empty list was only a picture. Now it is a button that opens a pop-up with the add form.
+The pop-up puts the cursor in the first field and closes once saved. Escape, the X or a click outside also close it.
+On phones it opens as a sheet from the bottom of the screen.
+- **Today → Your day:** add an activity (title, icon, start and end).
+- **To-Do:** add a to-do (date, time, tag, repeat).
+- **Notes:** a quick note (title, text, tag, reminder, pin). Both empty spots on the page have it.
+- **Spending:** add an expense for the day shown.
+- **Routines:** add an activity to a routine that has none.
+- **Student:** add a class, an assignment or exam, or a subject.
+- **Work:** add a project or a meeting.
+The add forms already on these pages stay where they are. New file: `components/AddDialog.tsx`. No migration.

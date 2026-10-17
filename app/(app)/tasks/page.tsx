@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AddDialog } from '@/components/AddDialog';
 import { Repeat as RepeatIcon, Timer } from 'lucide-react';
 import { REPEATS, repeatLabel } from '@/lib/tasks';
 import { addTask, clearCompletedTasks, deleteTask, setTaskDone } from '@/app/actions';
@@ -82,7 +83,30 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
 
       <section className="card flush">
         {shown.length === 0 ? (
-          <div className="empty">{status === 'done' ? 'Nothing completed yet.' : 'No tasks here yet.'}</div>
+          status === 'done' ? <div className="empty">Nothing completed yet.</div> : (
+            <AddDialog title="New to-do" label="Add a to-do" text="No tasks here yet. Tap + to add one.">
+        <form action={addTask} className="form-grid">
+          <label className="field span-6">Task<input className="input" name="title" required maxLength={120} placeholder="e.g. Renew passport" /></label>
+          <label className="field span-2">Due date<input className="input" type="date" name="dueDate" /></label>
+          <label className="field span-2">Time<input className="input" type="time" name="dueTime" /></label>
+          <label className="field span-2">Tag
+            <select className="select" name="tag" defaultValue="Personal">
+              {tags.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="field span-2">New tag (optional)<input className="input" name="newTag" maxLength={20} placeholder="e.g. Errands" /></label>
+          <label className="field span-4">Repeat
+            <select className="select" name="repeat" defaultValue="none">
+              {REPEATS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </label>
+          <p className="span-8 small muted" style={{ alignSelf: 'center' }}>A repeating task comes back on its next date when you tick it off. Without a date it starts today.</p>
+          <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn primary" type="submit">Add task</button>
+          </div>
+        </form>
+            </AddDialog>
+          )
         ) : (
           <table className="table task-table">
             <thead>

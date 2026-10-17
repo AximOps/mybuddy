@@ -1,4 +1,5 @@
 import { PremiumGate } from '@/components/PremiumGate';
+import { AddDialog } from '@/components/AddDialog';
 import Link from 'next/link';
 import { addClient, addMeeting, addMeetingAction, addProject, addTimeEntry, actionToTask, createInvoice, emailMeetingNotes, deleteClient, deleteMeeting, deleteMeetingAction, deleteProject, deleteTimeEntry, sendMeetingInvite, startTimer, stopTimer, toggleMeetingAction, updateMeeting } from '@/app/actions';
 import { CalendarPlus, Video } from 'lucide-react';
@@ -246,7 +247,16 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
         <div className="layout-2">
           <section className="card flush">
             <div className="card-head"><h2>Projects</h2><span className="muted small">{data.projects.length} projects</span></div>
-            {data.projects.length === 0 ? <div className="empty">No projects yet.</div> : (
+            {data.projects.length === 0 ? (
+              <AddDialog title="New project" label="Add a project" text="No projects yet. Tap + to add one.">
+              <form action={addProject} className="stack" style={{ gap: 12 }}>
+                <label className="field">Project name<input className="input" name="name" required maxLength={80} /></label>
+                <label className="field">Client (optional)<select className="select" name="clientId" defaultValue=""><option value="">No client</option>{data.clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+                <label className="field">Hourly rate ({cur}, optional)<input className="input" name="rate" inputMode="decimal" placeholder="e.g. 1500" /></label>
+                <button className="btn primary block" type="submit">Add project</button>
+              </form>
+              </AddDialog>
+            ) : (
               <table className="table">
                 <thead><tr><th>Project</th><th>Client</th><th>Rate per hour</th><th className="action-col" aria-label="Actions" /></tr></thead>
                 <tbody>
@@ -293,7 +303,20 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
         <div className="layout-2">
           <section className="card flush">
             <div className="card-head"><h2>Meetings</h2><span className="muted small">{data.meetings.length} meetings</span></div>
-            {data.meetings.length === 0 ? <div className="empty">No meetings yet.</div> : (
+            {data.meetings.length === 0 ? (
+              <AddDialog title="New meeting" label="Add a meeting" text="No meetings yet. Tap + to add one.">
+                <form action={addMeeting} className="form-grid">
+                  <label className="field span-12">Title<input className="input" name="title" required maxLength={120} /></label>
+                  <label className="field span-4">Date<input className="input" type="date" name="meetingOn" required defaultValue={data.today} /></label>
+                  <label className="field span-4">Starts<input className="input" type="time" name="start" /></label>
+                  <label className="field span-4">Ends<input className="input" type="time" name="end" /></label>
+                  <MeetField />
+                  <label className="field span-12">Attendees<input className="input" name="attendees" maxLength={300} placeholder="Names or emails, e.g. ben@company.com, Cara" /></label>
+                  <label className="field span-12">Agenda<textarea name="agenda" rows={3} /></label>
+                  <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Create meeting</button></div>
+                </form>
+              </AddDialog>
+            ) : (
               <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                 {data.meetings.map(m => (
                   <li key={m.id} className="card-body" style={{ borderTop: '1px solid var(--line)', background: m.id === data.meeting?.id ? 'var(--accent-soft)' : undefined }}>

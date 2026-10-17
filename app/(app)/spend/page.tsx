@@ -1,4 +1,5 @@
 import { PremiumGate } from '@/components/PremiumGate';
+import { AddDialog } from '@/components/AddDialog';
 import Link from 'next/link';
 import { addBill, addExpense, deleteBill, deleteExpense, importBankCsv, setCategoryBudget, setMonthlyBudget } from '@/app/actions';
 import { postDueBills } from '@/lib/spending';
@@ -88,7 +89,22 @@ async function SpendPageContent({ searchParams }: { searchParams: Promise<{ day?
         <div className="stack">
         <section className="card flush">
           <div className="card-head"><h2>Expenses</h2><span className="muted small">{data.dayRows.length} entries</span></div>
-          {data.dayRows.length === 0 ? <div className="empty">Nothing recorded for this day.</div> : (
+          {data.dayRows.length === 0 ? (
+            <AddDialog title="Add an expense" label="Add an expense" text="Nothing recorded for this day. Tap + to add an expense.">
+            <form action={addExpense} className="stack" style={{ gap: 12 }}>
+              <input type="hidden" name="day" value={day} />
+              <label className="field">Amount ({cur})<input className="input" name="amount" inputMode="decimal" required placeholder="e.g. 250" /></label>
+              <label className="field">Category
+                <select className="select" name="category" defaultValue="food">
+                  {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+              <label className="field">New category (optional)<input className="input" name="newCategory" maxLength={20} placeholder="e.g. Gifts" /></label>
+              <label className="field">Note (optional)<input className="input" name="note" maxLength={120} placeholder="e.g. Lunch with Priya" /></label>
+              <button className="btn primary block" type="submit">Add expense</button>
+            </form>
+            </AddDialog>
+          ) : (
             <table className="table">
               <thead><tr><th>Category</th><th>Note</th><th style={{ textAlign: 'right' }}>Amount</th><th className="action-col" aria-label="Actions" /></tr></thead>
               <tbody>

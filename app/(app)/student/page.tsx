@@ -1,4 +1,5 @@
 import { PremiumGate } from '@/components/PremiumGate';
+import { AddDialog } from '@/components/AddDialog';
 import Link from 'next/link';
 import { addClass, addDeadline, addSubject, deleteClass, deleteDeadline, toggleDeadline } from '@/app/actions';
 import { withUser } from '@/lib/db';
@@ -88,7 +89,20 @@ async function StudentPageContent({ searchParams }: { searchParams: Promise<{ ta
         <div className="layout-2">
           <section className="card flush">
             <div className="card-head"><h2>Weekly timetable</h2><span className="muted small">{data.classes.length} classes</span></div>
-            {data.classes.length === 0 ? <div className="empty">No classes yet. Add a lecture, lab or tutorial.</div> : (
+            {data.classes.length === 0 ? (
+              <AddDialog title="Add a class" label="Add a class" text="No classes yet. Tap + to add a lecture, lab or tutorial.">
+            <form action={addClass} className="form-grid">
+              <label className="field span-12">Name<input className="input" name="title" required maxLength={60} placeholder="e.g. Engineering Maths" /></label>
+              <label className="field span-6">Type<select className="select" name="kind" defaultValue="lecture"><option value="lecture">Lecture</option><option value="lab">Lab</option><option value="tutorial">Tutorial</option></select></label>
+              <label className="field span-6">Day<select className="select" name="weekday" defaultValue="1">{WEEKDAY_NAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>
+              <label className="field span-6">Starts<input className="input" type="time" name="start" required /></label>
+              <label className="field span-6">Ends<input className="input" type="time" name="end" required /></label>
+              <label className="field span-6">Subject<select className="select" name="subjectId" defaultValue=""><option value="">None</option>{data.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+              <label className="field span-6">Room (optional)<input className="input" name="room" maxLength={20} /></label>
+              <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Add class</button></div>
+            </form>
+              </AddDialog>
+            ) : (
               <table className="table">
                 <thead><tr><th>Day</th><th>Time</th><th>Class</th><th>Room</th><th className="action-col" aria-label="Actions" /></tr></thead>
                 <tbody>
@@ -127,7 +141,18 @@ async function StudentPageContent({ searchParams }: { searchParams: Promise<{ ta
         <div className="layout-2">
           <section className="card flush">
             <div className="card-head"><h2>Assignments and exams</h2><span className="muted small">{openDeadlines.length} open</span></div>
-            {data.deadlines.length === 0 ? <div className="empty">Nothing due. Add an assignment or exam.</div> : (
+            {data.deadlines.length === 0 ? (
+              <AddDialog title="Add a deadline" label="Add an assignment or exam" text="Nothing due. Tap + to add an assignment or exam.">
+            <form action={addDeadline} className="form-grid">
+              <label className="field span-12">Title<input className="input" name="title" required maxLength={120} placeholder="e.g. Lab report 3" /></label>
+              <label className="field span-6">Type<select className="select" name="kind" defaultValue="assignment"><option value="assignment">Assignment</option><option value="exam">Exam</option></select></label>
+              <label className="field span-6">Subject<select className="select" name="subjectId" defaultValue=""><option value="">None</option>{data.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+              <label className="field span-6">Due date<input className="input" type="date" name="dueDate" required /></label>
+              <label className="field span-6">Time (optional)<input className="input" type="time" name="dueTime" /></label>
+              <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Add deadline</button></div>
+            </form>
+              </AddDialog>
+            ) : (
               <table className="table">
                 <thead><tr><th className="check-col" aria-label="Done" /><th>Title</th><th>Due</th><th className="action-col" aria-label="Actions" /></tr></thead>
                 <tbody>
@@ -167,7 +192,16 @@ async function StudentPageContent({ searchParams }: { searchParams: Promise<{ ta
         <div className="layout-2">
           <section className="card flush">
             <div className="card-head"><h2>Subjects</h2><span className="muted small">Open a subject to add marks and notes</span></div>
-            {data.subjects.length === 0 ? <div className="empty">No subjects yet.</div> : (
+            {data.subjects.length === 0 ? (
+              <AddDialog title="Add a subject" label="Add a subject" text="No subjects yet. Tap + to add one.">
+            <form action={addSubject} className="form-grid">
+              <label className="field span-12">Name<input className="input" name="name" required maxLength={60} placeholder="e.g. Engineering Maths" /></label>
+              {college ? <label className="field span-6">Credits<input className="input" name="credits" inputMode="decimal" placeholder="e.g. 4" /></label> : null}
+              <label className={`field ${college ? 'span-6' : 'span-12'}`}>Grade point (0 to 10, optional)<input className="input" name="gradePoint" inputMode="decimal" placeholder="Leave empty to use marks" /></label>
+              <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Add subject</button></div>
+            </form>
+              </AddDialog>
+            ) : (
               <table className="table">
                 <thead><tr><th>Subject</th>{college ? <th>Credits</th> : null}<th>Average</th><th>{college ? 'Grade point' : 'Grade'}</th></tr></thead>
                 <tbody>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AddDialog } from '@/components/AddDialog';
 import { ArrowRight, Bell, CalendarRange, Briefcase, Check, Lock, NotebookPen, Pin, Plus, Timer, Wallet } from 'lucide-react';
 import { addEvent, addTask, moveUnfinishedTasks, setTaskDone, stopTimer, toggleDayCheck, toggleDeadline, toggleEvent } from '@/app/actions';
 import { withUser } from '@/lib/db';
@@ -172,7 +173,16 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             <span className="legend-chips small muted">{agenda.length} items</span>
           </div>
           {agenda.length === 0 ? (
-            <div className="empty">Nothing planned {dayLabel} yet. Add your first activity below, or a to-do with a time on the right.</div>
+            <AddDialog title="Add an activity" label="Add an activity" text={<>Nothing planned {dayLabel} yet. Tap + to add your first activity, or add a to-do with a time on the right.</>}>
+            <form action={addEvent} className="form-grid">
+              <input type="hidden" name="day" value={day} />
+              <label className="field span-12">Title<input className="input" name="title" required maxLength={120} placeholder="e.g. Evening walk" /></label>
+              <div className="span-12"><IconPicker /></div>
+              <label className="field span-6">Starts<input className="input" name="start" type="time" required /></label>
+              <label className="field span-6">Ends<input className="input" name="end" type="time" required /></label>
+              <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Add activity</button></div>
+            </form>
+            </AddDialog>
           ) : (
             <ol className="agenda">
               {timed.map((a, i) => (
