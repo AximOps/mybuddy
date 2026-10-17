@@ -81,3 +81,11 @@ items and Meet links. Only the personal space syncs. Teams stay on the website u
 - `user_settings.data_reset_at`.
 
 New files: `lib/sync.ts`, `app/api/mobile/sync/route.ts`. Changed: `app/actions.ts` (reset sets `data_reset_at`).
+
+## Preview 7: fixes for the phone app
+- `POST /api/mobile/sync` returns a clear 503 error when the database has not had migration `0021_sync.sql`,
+  instead of a general 500. **Run `npm run db:migrate` on the production database before the phone app
+  can sync.**
+- New optional `MOBILE_WEB_ORIGINS` setting, with `proxy.ts`: lets the app's browser build call the sign-in and
+  sync API from its own address (for testing on a computer or phone browser). Native phone apps do not need it.
+  The same addresses are added to Better Auth's trusted origins.

@@ -17,7 +17,8 @@ export const auth = betterAuth({
   // sign-in reply and sends it as "Authorization: Bearer <token>" (the bearer plugin).
   plugins: [bearer()],
   // The phone app's link schemes, so its requests pass the origin check.
-  trustedOrigins: ['amiroon://', 'mybuddy://'],
+  // MOBILE_WEB_ORIGINS: addresses of the app's browser build, if it is opened from its own address.
+  trustedOrigins: ['amiroon://', 'mybuddy://', ...(process.env.MOBILE_WEB_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean)],
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,

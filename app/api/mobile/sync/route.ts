@@ -45,7 +45,9 @@ export async function POST(req: Request) {
   const sorted = changes.map((ch, i) => ({ ch, i })).sort((a, b) =>
     (order.get(a.ch?.table) ?? 99) - (order.get(b.ch?.table) ?? 99) || a.i - b.i);
 
-  const result = await withUser(user.id, async c => {
+  let result;
+  try {
+  result = await withUser(user.id, async c => {
     const ws = await personalWorkspaceId(c, user.id);
     // Phone clock vs server clock; ignored when absurd (more than a day).
     const skew = Number.isFinite(Number(body.clientNow)) ? Date.now() - Number(body.clientNow) : 0;
@@ -113,5 +115,15 @@ export async function POST(req: Request) {
       userId: user.id,
     };
   });
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    // Missing column or table: the sync migration (0021_sync.sql) has not been run on this database.
+    if (code === '42703' || code === '42P01' || code === '42883') {
+      console.error('sync: database is missing the sync migration', e);
+      return Response.json({ error: 'The Amiroon server needs a database update before it can sync (migration 0021_sync.sql). Please try again later.' }, { status: 503, headers: NO_STORE });
+    }
+    console.error('sync failed', e);
+    return Response.json({ error: 'The Amiroon server could not sync right now. Please try again later.' }, { status: 500, headers: NO_STORE });
+  }
   return Response.json(result, { headers: NO_STORE });
 }
