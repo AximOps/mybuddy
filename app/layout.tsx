@@ -9,7 +9,7 @@ export { viewport } from './page-viewport';
 
 // The page title comes from metadata below. Do not add a <title> tag in <head>, it would override this.
 export const metadata: Metadata = {
-  title: 'My Buddy by Amiroon',
+  title: 'My Buddy by Opseros',
   description: 'Life Organized!',
   applicationName: 'My Buddy',
   appleWebApp: { capable: true, title: 'My Buddy', statusBarStyle: 'default' },

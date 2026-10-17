@@ -1,5 +1,5 @@
 /* ===================================================================
-   Amiroon web design system
+   My Buddy web design system
    One set of tokens, light and dark. Dark follows the OS unless the
    person picks Light or Dark in Settings (data-theme on <html>).
    =================================================================== */
@@ -62,12 +62,14 @@ p { margin: 0; }
   background: var(--surface); border-right: 1px solid var(--line); overflow-y: auto;
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 18px; }
-.brand-word { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -0.02em; line-height: 1.1; }
+.brand-word { font-family: var(--font-display); font-weight: 800; font-size: 23px; letter-spacing: -0.02em; line-height: 1.1; }
 .brand-word span { color: var(--accent); }
-.brand-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.brand-badge { font-family: inherit; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; line-height: 1; padding: 4px 7px 3px; border-radius: 999px; background: var(--sun, #FFC93C); color: #3A2A00; white-space: nowrap; text-transform: uppercase; }
-.auth-brand .brand-badge { font-size: 10px; padding: 4px 8px 3px; }
-.brand-tag { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.02em; margin-top: 2px; }
+.brand-text { display: inline-flex; flex-direction: column; min-width: 0; }
+.brand-sub { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 1px; white-space: nowrap; }
+.brand-badge { font-family: inherit; font-size: 7px; font-weight: 800; letter-spacing: 0.04em; line-height: 1; padding: 2px 4px 2px; border-radius: 999px; background: var(--sun, #FFC93C); color: #3A2A00; white-space: nowrap; text-transform: uppercase; }
+.auth-brand .brand-badge { font-size: 8.5px; padding: 3px 5px 2px; }
+.auth-brand .brand-tag { font-size: 10.5px; }
+.brand-tag { font-size: 9px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav a {
   position: relative; display: flex; align-items: center; gap: 11px; height: 40px; padding: 0 12px; border-radius: 11px;
@@ -282,8 +284,10 @@ details.panel > summary { font-family: var(--font-display); font-weight: 700; co
   .desktop-only { display: none !important; }
   .mobile-only { display: inline-flex; }
   .mobile-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
-  .mobile-brand .brand-word { font-size: 17px; }
-  .mobile-brand .brand-tag { display: block; font-size: 10px; margin-top: 1px; }
+  .mobile-brand .brand-word { font-size: 22px; }
+  .mobile-brand .brand-tag { display: inline; font-size: 8px; }
+  .mobile-brand .brand-word { white-space: nowrap; }
+  .mobile-brand .brand-badge { font-size: 6.5px; padding: 2px 4px 2px; }
   .topbar { height: 56px; padding: 0 14px; }
   .content { padding: 20px 14px calc(100px + env(safe-area-inset-bottom)); }
   .page-head { flex-direction: column; align-items: stretch; gap: 14px; margin-bottom: 18px; }
@@ -1069,7 +1073,7 @@ a.mini-main:hover .title { color: var(--accent); }
 .invite-box { padding: 16px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
 @media (max-width: 560px) { .meet-row { flex-direction: column; } .meet-row .btn { align-self: flex-start; } }
 
-/* ---- Login headline: "Your Day / Life / Money / Work / Study, organized by Amiroon." ---- */
+/* ---- Login headline: "Your Day / Life / Money / Work / Study, organized by My Buddy." ---- */
 .auth-hero h2.auth-headline { font-size: clamp(36px, 3.9vw, 54px); line-height: 1.06; margin-bottom: 12px; }
 .auth-headline-line { display: block; white-space: nowrap; }
 .auth-headline-sub { display: block; }

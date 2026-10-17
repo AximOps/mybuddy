@@ -119,3 +119,14 @@ New files: `lib/sync.ts`, `app/api/mobile/sync/route.ts`. Changed: `app/actions.
 - **Migration `0022_accept_invite_no_demote.sql`** (run `npm run db:migrate`): accepting an invitation never
   lowers a role. Before, an owner who opened an old "member" invitation became a member, which could leave a
   team without an owner. This affected the website too.
+
+## Preview 10
+- On phones, the top bar keeps "My Buddy" and the BY AMIROON badge on one line. Before, the name broke in two and
+  was pushed out of the 56 px bar. CSS only, no migration.
+
+## Preview 11
+- **By Opseros:** the brand is now "My Buddy by Opseros" (page title, installed-app name, logo badge).
+- **Logo layout:** "Life Organized!" sits on the left under the name and the yellow BY OPSEROS badge sits under the
+  right end of "Buddy", on the same line. Same on the login page, the sidebar and the phone top bar.
+- **Phone app:** `/api/mobile/me` now also says whether the account is a platform admin, so the app's profile
+  menu can show Admin. No migration.

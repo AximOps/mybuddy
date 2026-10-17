@@ -16,13 +16,13 @@ export function BrandLockup({ size = 36, large = false, onDark = false }: { size
   return (
     <div className="brand-lockup" style={{ display: 'flex', alignItems: 'center', gap: large ? 16 : 10 }}>
       <BuddyLogo size={size} ring={onDark} />
-      <div>
-        {/* "My Buddy" with an Amiroon maker's badge beside it (option C). */}
-        <div className="brand-name-row">
-          <div className="brand-word" style={large ? { fontSize: 30 } : undefined}>My <span>Buddy</span></div>
-          <span className="brand-badge">By Amiroon</span>
+      {/* "My Buddy" on top; below it the tagline on the left and the "by Opseros" badge under the right end of the name. */}
+      <div className="brand-text">
+        <div className="brand-word" style={large ? { fontSize: 30 } : undefined}>My <span>Buddy</span></div>
+        <div className="brand-sub">
+          <span className="brand-tag" style={onDark ? { color: 'rgba(255,255,255,0.85)' } : undefined}>Life Organized!</span>
+          <span className="brand-badge">By Opseros</span>
         </div>
-        <div className="brand-tag" style={onDark ? { color: 'rgba(255,255,255,0.85)' } : undefined}>Life Organized!</div>
       </div>
     </div>
   );

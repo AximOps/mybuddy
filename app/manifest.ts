@@ -3,7 +3,7 @@ import type { MetadataRoute } from 'next';
 /** Lets people install My Buddy on their phone or computer like an app. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'My Buddy by Amiroon',
+    name: 'My Buddy by Opseros',
     short_name: 'My Buddy',
     description: 'Life Organized! Routines, to-dos, notes, focus and more.',
     id: '/today',
