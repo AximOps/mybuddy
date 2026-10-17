@@ -795,6 +795,8 @@ export async function resetAllData(formData: FormData) {
     await c.query(`delete from routine_days where workspace_id = $1`, [ws]);
     await c.query(`delete from events where workspace_id = $1`, [ws]);
     await c.query(`delete from routines where workspace_id = $1`, [ws]);
+    // Tells the phone app to clear its copy and download again (the rows above are gone for good).
+    await c.query(`update user_settings set data_reset_at = now() where user_id = $1`, [user.id]);
   });
   revalidatePath('/', 'layout');
 }

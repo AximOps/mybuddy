@@ -53,3 +53,31 @@ The add forms already on these pages stay where they are. New file: `components/
 - Existing pages that read the session, such as `/api/upcoming`, also accept the bearer token.
 - No migration. Website cookies and sign-in work as before.
 - For Google sign-in in the app, the server's Google settings must accept the app's Google client IDs.
+
+## Preview 6: sync with the phone app (Stage 2)
+The phone app and the website now share one set of data. A change made on either side shows up on the other.
+
+**What syncs:** routines and their days, activities and ticks, to-dos, notes with checklists and reminders,
+spending, subjects, classes, deadlines, assessments, clients, projects, time entries, and meetings with their action
+items and Meet links. Only the personal space syncs. Teams stay on the website until Stage 3.
+
+**How it works**
+- New endpoint `POST /api/mobile/sync` (bearer token). In one call the phone sends its changes and gets back
+  what changed on the server, in pages of up to 2,000 rows (`more: true` means call again).
+- **Newest change wins.** Each phone change carries the time it was made. The server keeps it only if it is
+  newer than the server's copy, and otherwise sends its own copy back. A phone that was offline for a day
+  does not overwrite newer edits made elsewhere. The server also corrects for a phone clock that is wrong.
+- **Deletions sync.** Rows are deleted softly (`deleted_at`), and the phone receives the deletion.
+- A change the server refuses (for example a time entry without a project, or text longer than the website
+  allows) is skipped, and the phone tells the person how many were not saved.
+- Linked items (routine, subject, project and so on) and checklist or action item ids must belong to the
+  person's own personal space. Foreign keys skip row-level security, so the server checks these itself.
+- **Reset all data** on the website now also clears the data on the person's phones the next time they sync.
+
+**Migration `0021_sync.sql`** (run `npm run db:migrate` before deploying):
+- `updated_at` and touch triggers for classes, assessments, clients, projects and time entries, plus sync indexes.
+- `changed_at` (the time of the change) on every synced table, set by a trigger.
+- Changes to checklist items and meeting actions mark their note or meeting as changed.
+- `user_settings.data_reset_at`.
+
+New files: `lib/sync.ts`, `app/api/mobile/sync/route.ts`. Changed: `app/actions.ts` (reset sets `data_reset_at`).
