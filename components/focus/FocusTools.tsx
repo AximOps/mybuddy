@@ -130,7 +130,7 @@ function BreaksPanel() {
         ) : null}
       </div>
       <SoundPicker id="break-sound" value={breaks.sound} onChange={s => setBreaks({ sound: s })} />
-      <p className="small muted">Break reminders ring while Amiroon is open in a tab or as the installed app on this device. Settings stay on this device.</p>
+      <p className="small muted">Break reminders ring while My Buddy is open in a tab or as the installed app on this device. Settings stay on this device.</p>
       <NotifyHint />
     </section>
   );
@@ -156,7 +156,7 @@ function AlarmPanel() {
       <div className="tool-toggle">
         <div>
           <h2>Alarms</h2>
-          <p className="small muted">{next && now ? <>Next alarm <strong>{rel((next.at as number) - now)}</strong>{next.a.label ? ` · ${next.a.label}` : ''}</> : 'Set a time and Amiroon rings, once or on repeat days.'}</p>
+          <p className="small muted">{next && now ? <>Next alarm <strong>{rel((next.at as number) - now)}</strong>{next.a.label ? ` · ${next.a.label}` : ''}</> : 'Set a time and My Buddy rings, once or on repeat days.'}</p>
         </div>
         {!draft ? <button type="button" className="btn primary sm" onClick={() => setDraft(blankDraft())}><Plus size={15} /> New alarm</button> : null}
       </div>
@@ -212,7 +212,7 @@ function AlarmPanel() {
           })}
         </ul>
       ) : !draft ? <div className="tool-empty"><AlarmClock size={22} aria-hidden="true" /> No alarms yet.</div> : null}
-      <p className="small muted">Alarms ring for up to a minute while Amiroon is open in a tab or as the installed app on this device, so keep the volume up. They are saved on this device.</p>
+      <p className="small muted">Alarms ring for up to a minute while My Buddy is open in a tab or as the installed app on this device, so keep the volume up. They are saved on this device.</p>
       <NotifyHint />
     </section>
   );
@@ -334,7 +334,7 @@ function RemindersPanel({ reminders, defaultAt }: { reminders: ReminderRow[]; de
       <div className="tool-toggle slim">
         <div>
           <strong>Ring in the app at the reminder time</strong>
-          <p className="small muted">A pop-up and a sound for every timed reminder, on any page of Amiroon.</p>
+          <p className="small muted">A pop-up and a sound for every timed reminder, on any page of My Buddy.</p>
         </div>
         <Switch checked={ringReminders} onChange={setRingReminders} label="Ring in the app at the reminder time" />
       </div>

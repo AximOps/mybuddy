@@ -1,7 +1,7 @@
 import type { PoolClient } from 'pg';
 
 /*
- * Two-way sync with the Amiroon phone app (personal workspace only).
+ * Two-way sync with the My Buddy phone app (personal workspace only).
  *
  * The phone sends the rows it changed (or deleted) with the time of each change. The server saves a
  * change only when it is at least as new as the server's copy ("last change wins"), and only for rows

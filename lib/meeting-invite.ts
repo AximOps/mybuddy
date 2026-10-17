@@ -23,7 +23,7 @@ export function whenText(i: Pick<InviteInput, 'day' | 'startMin' | 'endMin' | 't
 }
 
 export function buildInviteIcs(i: InviteInput): string {
-  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Amiroon//Meetings//EN', 'CALSCALE:GREGORIAN', 'METHOD:REQUEST',
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//My Buddy//Meetings//EN', 'CALSCALE:GREGORIAN', 'METHOD:REQUEST',
     'BEGIN:VEVENT', `UID:meeting-${i.id}@mybuddy`, `SEQUENCE:${i.seq}`, `DTSTAMP:${utc(Date.now())}`, `SUMMARY:${esc(i.title)}`];
   if (i.startMin === null) {
     const next = new Date(Date.parse(`${i.day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);

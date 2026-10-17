@@ -94,3 +94,28 @@ New files: `lib/sync.ts`, `app/api/mobile/sync/route.ts`. Changed: `app/actions.
 - New `GET /api/mobile/health` returns `{ app: "amiroon", api: 1, sync: true|false }`. The phone app uses it
   to check a website address before it saves it. `sync` is false until migration `0021_sync.sql` has run. No
   personal data.
+
+## Preview 9: My Buddy by Amiroon, and Teams for the phone app
+- **New name (option C):**
+  - The logo is "My **Buddy**" with a yellow **BY AMIROON** badge, and the tagline stays "Life Organized!"
+    (`components/BuddyLogo.tsx`, `.brand-badge` in `globals.css`). In the narrow sidebar the badge sits under
+    the name.
+  - The login heading is "Your **Day**, organized by My **Buddy**...". "My Buddy..." never breaks across two
+    lines.
+  - Each rotating word now has room for the tail of y, so nothing shows above the next word.
+  - The browser tab and the installed app's full name are "My Buddy by Amiroon". The home-screen label is
+    "My Buddy".
+  - Every "Amiroon" in the app text and emails now says "My Buddy": invitations, password reset, meeting
+    notes, install banner, reminders, Focus, admin, the invoice footer and the calendar feed name. The export
+    file is now `my-buddy-export-….json`.
+  - Kept on purpose: browser storage keys, cookies, the database role and the app link schemes.
+- **New `GET/POST /api/mobile/teams`** (bearer token):
+  - Gives the phone app the website's Teams features: list, create, invite (returns the link when email is
+    off), cancel invitations, roles, remove, rename, leave, delete and accept an invitation link.
+  - Also returns the team's projects and upcoming meetings.
+  - Same rules as the website: creating and inviting need Premium and Work or Student mode. Accepting,
+    renaming, roles, removing and cancelling invitations need Premium only. Leaving and deleting are always
+    allowed.
+- **Migration `0022_accept_invite_no_demote.sql`** (run `npm run db:migrate`): accepting an invitation never
+  lowers a role. Before, an owner who opened an old "member" invitation became a member, which could leave a
+  team without an owner. This affected the website too.

@@ -3,7 +3,7 @@ import { pool } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 /**
- * Lets the phone app check that an address is an Amiroon website, and whether sync is ready
+ * Lets the phone app check that an address is a My Buddy website, and whether sync is ready
  * (the sync migration has run). No personal data.
  */
 export async function GET() {

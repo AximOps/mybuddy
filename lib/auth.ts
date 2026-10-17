@@ -13,7 +13,7 @@ const apple = process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   database: pool,
-  // The Amiroon phone app signs in with the same accounts. It keeps the session token from the
+  // The My Buddy phone app signs in with the same accounts. It keeps the session token from the
   // sign-in reply and sends it as "Authorization: Bearer <token>" (the bearer plugin).
   plugins: [bearer()],
   // The phone app's link schemes, so its requests pass the origin check.
@@ -28,7 +28,7 @@ export const auth = betterAuth({
       const { sendMail } = await import('./mail');
       const result = await sendMail(
         user.email,
-        'Reset your Amiroon password',
+        'Reset your My Buddy password',
         `Hi ${user.name || 'there'},\n\nUse this link to choose a new password. It expires in one hour:\n${url}\n\nIf you did not ask for this, you can ignore this email. Your password stays the same.`,
       );
       // Without email set up, the link is printed in the server log while developing only.

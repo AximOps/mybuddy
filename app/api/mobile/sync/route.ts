@@ -120,10 +120,10 @@ export async function POST(req: Request) {
     // Missing column or table: the sync migration (0021_sync.sql) has not been run on this database.
     if (code === '42703' || code === '42P01' || code === '42883') {
       console.error('sync: database is missing the sync migration', e);
-      return Response.json({ error: 'The Amiroon server needs a database update before it can sync (migration 0021_sync.sql). Please try again later.' }, { status: 503, headers: NO_STORE });
+      return Response.json({ error: 'The My Buddy server needs a database update before it can sync (migration 0021_sync.sql). Please try again later.' }, { status: 503, headers: NO_STORE });
     }
     console.error('sync failed', e);
-    return Response.json({ error: 'The Amiroon server could not sync right now. Please try again later.' }, { status: 500, headers: NO_STORE });
+    return Response.json({ error: 'The My Buddy server could not sync right now. Please try again later.' }, { status: 500, headers: NO_STORE });
   }
   return Response.json(result, { headers: NO_STORE });
 }

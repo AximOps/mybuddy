@@ -95,7 +95,7 @@ export async function invoicePdf(o: {
   y -= 22;
   text(`Total due: ${moneyText(o.totalMinor, o.currency)}`, 380, 13, bold);
   y -= 40;
-  text('Generated from timesheets in Amiroon. Taxes and payment terms are not included.', 50, 8, font, muted);
+  text('Generated from timesheets in My Buddy. Taxes and payment terms are not included.', 50, 8, font, muted);
 
   return doc.save();
 }

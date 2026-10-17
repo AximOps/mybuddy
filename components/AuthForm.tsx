@@ -11,7 +11,7 @@ import { BrandLockup } from './BuddyLogo';
 
 type Mode = 'login' | 'signup';
 
-/** Words that take turns in the headline: "Your Day / Life / Money / Work / Study, organized by Amiroon." */
+/** Words that take turns in the headline: "Your Day / Life / Money / Work / Study, organized by My Buddy." */
 const ROTATING = ['Day', 'Life', 'Money', 'Work', 'Study'];
 
 /**
@@ -35,16 +35,16 @@ function RotatingHeadline() {
     return () => { clearInterval(t); if (snap) clearTimeout(snap); };
   }, []);
   return (
-    <h2 className="auth-headline" aria-label="Your day, life, money, work and study, organized by Amiroon.">
+    <h2 className="auth-headline" aria-label="Your day, life, money, work and study, organized by My Buddy.">
       <span className="auth-headline-line" aria-hidden="true">
         Your{' '}
         <span className="auth-rot">
-          <span className={`auth-rot-track${animate ? '' : ' no-anim'}`} style={{ transform: `translateY(-${idx * 1.06}em)` }}>
+          <span className={`auth-rot-track${animate ? '' : ' no-anim'}`} style={{ transform: `translateY(-${idx * 1.3}em)` }}>
             {[...ROTATING, ROTATING[0]].map((w, i) => <span key={i}>{w}</span>)}
           </span>
         </span>
       </span>
-      <span className="auth-headline-sub" aria-hidden="true">organized by Ami<span>roon</span>...</span>
+      <span className="auth-headline-sub" aria-hidden="true">organized by <span style={{ color: 'inherit', whiteSpace: 'nowrap' }}>My <span>Buddy</span>...</span></span>
     </h2>
   );
 }
@@ -239,7 +239,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
             {signup ? (
               <>Already have an account? <Link href="/login">Log in</Link></>
             ) : (
-              <>New to Amiroon? <Link href="/signup">Create an account</Link></>
+              <>New to My Buddy? <Link href="/signup">Create an account</Link></>
             )}
           </p>
         </div>

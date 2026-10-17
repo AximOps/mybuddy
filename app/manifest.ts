@@ -1,10 +1,10 @@
 import type { MetadataRoute } from 'next';
 
-/** Lets people install Amiroon on their phone or computer like an app. */
+/** Lets people install My Buddy on their phone or computer like an app. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Amiroon · Life Organized!',
-    short_name: 'Amiroon',
+    name: 'My Buddy by Amiroon',
+    short_name: 'My Buddy',
     description: 'Life Organized! Routines, to-dos, notes, focus and more.',
     id: '/today',
     start_url: '/today',

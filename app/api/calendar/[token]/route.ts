@@ -75,7 +75,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     return { tz, events: out };
   });
 
-  return new Response(buildCalendar('Amiroon', tz, events), {
+  return new Response(buildCalendar('My Buddy', tz, events), {
     headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'private, max-age=300', 'Content-Disposition': 'inline; filename="mybuddy.ics"' },
   });
 }

@@ -1,7 +1,7 @@
-/** The Amiroon logo, drawn the same way as the phone app (same shapes and colours). */
+/** The My Buddy logo, drawn the same way as the phone app (same shapes and colours). */
 export function BuddyLogo({ size = 40, ring = false }: { size?: number; ring?: boolean }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" role="img" aria-label="Amiroon logo" style={{ flex: 'none' }}>
+    <svg width={size} height={size} viewBox="0 0 48 48" role="img" aria-label="My Buddy logo" style={{ flex: 'none' }}>
       <rect width="48" height="48" rx="13" fill="var(--accent)" stroke={ring ? '#FFFFFF' : 'none'} strokeWidth={ring ? 2 : 0} />
       <circle cx="24" cy="24" r="15" fill="#FFC93C" />
       <circle cx="18.5" cy="20" r="2" fill="#3A2A00" />
@@ -17,7 +17,11 @@ export function BrandLockup({ size = 36, large = false, onDark = false }: { size
     <div className="brand-lockup" style={{ display: 'flex', alignItems: 'center', gap: large ? 16 : 10 }}>
       <BuddyLogo size={size} ring={onDark} />
       <div>
-        <div className="brand-word" style={large ? { fontSize: 30 } : undefined}>Ami<span style={onDark ? { color: '#FFFFFF' } : undefined}>roon</span></div>
+        {/* "My Buddy" with an Amiroon maker's badge beside it (option C). */}
+        <div className="brand-name-row">
+          <div className="brand-word" style={large ? { fontSize: 30 } : undefined}>My <span>Buddy</span></div>
+          <span className="brand-badge">By Amiroon</span>
+        </div>
         <div className="brand-tag" style={onDark ? { color: 'rgba(255,255,255,0.85)' } : undefined}>Life Organized!</div>
       </div>
     </div>
