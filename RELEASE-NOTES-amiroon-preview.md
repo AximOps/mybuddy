@@ -8,7 +8,14 @@ Everything else is the same. No database migration beyond v27.1.
   It has the same logo icon and the tagline "Life Organized!".
 - **Browser tab, installed app name and home-screen label:** "Amiroon". The full app name is
   "Amiroon · Life Organized!".
-- **Login and signup headline:** "Life, organized." replaces "Plan your day, buddy.", which only worked with the old name.
+- **Login and signup brand panel** (option C from the prototype):
+  - The headline is "Your **Day**, organized by Ami**roon**..." The yellow word changes every 2 seconds:
+    Day → Life → Money → Work → Study, then starts again. Screen readers hear the whole sentence once.
+    With reduced motion turned on, the words change without sliding.
+  - Under it: "Free to start. Works on your phone and computer, always in sync."
+  - Four tiles: Plan, Focus, Money, and Study and work, each with one line on what it covers.
+  - The Free and Premium cards each have one line instead of a feature list. The Today sample card is removed.
+  - On phones the order is: logo, headline, tiles, login form, plans.
 - If a user has no name, the greeting says "Good morning, there" instead of "buddy".
 - Every "My Buddy" in the app text and emails now says "Amiroon": invitations, password reset, meeting notes,
   install banner, Settings, Focus and admin. Also renamed: the data export file name, the calendar feed name

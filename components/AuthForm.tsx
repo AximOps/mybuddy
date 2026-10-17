@@ -1,48 +1,71 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Eye, EyeOff, LockKeyhole, Mail, Smartphone, UserRound } from 'lucide-react';
+import { Briefcase, CalendarCheck, Eye, EyeOff, LockKeyhole, Mail, Smartphone, Timer, UserRound, Wallet } from 'lucide-react';
 import { COUNTRY_CODES, normalizePhone } from '@/lib/phone';
 import { authClient } from '@/lib/auth-client';
-import { FREE_FEATURES, PERIOD, PREMIUM_FEATURES, PRICE } from '@/lib/plans';
+import { PERIOD, PRICE } from '@/lib/plans';
 import { BrandLockup } from './BuddyLogo';
 
 type Mode = 'login' | 'signup';
 
-/** A small sample of the Today page. The items tick off one by one when the page opens. */
-const PREVIEW = [
-  { time: '07:00', title: 'Morning walk', tag: 'Health' },
-  { time: '09:30', title: 'Deep work: project plan', tag: 'Focus' },
-  { time: '13:00', title: 'Lunch with Sam', tag: 'Personal' },
-  { time: '18:00', title: 'Read 20 pages', tag: 'Growth' },
+/** Words that take turns in the headline: "Your Day / Life / Money / Work / Study, organized by Amiroon." */
+const ROTATING = ['Day', 'Life', 'Money', 'Work', 'Study'];
+
+/**
+ * The headline. Every 2 seconds the next word slides up. The list repeats the first word at the end,
+ * so after "Study" it slides on to "Day" and then jumps back to the start without a visible move.
+ * Screen readers hear the whole sentence once, from aria-label.
+ */
+function RotatingHeadline() {
+  const [idx, setIdx] = useState(0);
+  const [animate, setAnimate] = useState(true);
+  useEffect(() => {
+    let snap: ReturnType<typeof setTimeout> | undefined;
+    const t = setInterval(() => {
+      setAnimate(true);
+      setIdx(i => {
+        const next = i + 1;
+        if (next === ROTATING.length) snap = setTimeout(() => { setAnimate(false); setIdx(0); }, 700);
+        return next;
+      });
+    }, 2000);
+    return () => { clearInterval(t); if (snap) clearTimeout(snap); };
+  }, []);
+  return (
+    <h2 className="auth-headline" aria-label="Your day, life, money, work and study, organized by Amiroon.">
+      <span className="auth-headline-line" aria-hidden="true">
+        Your{' '}
+        <span className="auth-rot">
+          <span className={`auth-rot-track${animate ? '' : ' no-anim'}`} style={{ transform: `translateY(-${idx * 1.06}em)` }}>
+            {[...ROTATING, ROTATING[0]].map((w, i) => <span key={i}>{w}</span>)}
+          </span>
+        </span>
+      </span>
+      <span className="auth-headline-sub" aria-hidden="true">organized by Ami<span>roon</span>...</span>
+    </h2>
+  );
+}
+
+const TILES = [
+  { icon: CalendarCheck, title: 'Plan', text: 'Routines, to-dos and notes, with reminders' },
+  { icon: Timer, title: 'Focus', text: 'Focus timer, break reminders, alarms and a stopwatch' },
+  { icon: Wallet, title: 'Money', text: 'Spending, monthly budgets and bills' },
+  { icon: Briefcase, title: 'Study and work', text: 'Timetable, projects, meetings and teams' },
 ];
 
-function TodayPreview() {
+function FeatureTiles() {
   return (
-    <div className="day-preview" aria-hidden="true">
-      <div className="day-preview-head">
-        <div>
-          <div className="day-preview-title">Today</div>
-          <div className="day-preview-sub">3 of 4 done</div>
-        </div>
-        <svg className="day-ring" viewBox="0 0 44 44" width="44" height="44">
-          <circle cx="22" cy="22" r="18" className="day-ring-track" />
-          <circle cx="22" cy="22" r="18" className="day-ring-fill" pathLength="100" />
-        </svg>
-      </div>
-      <ul>
-        {PREVIEW.map((item, i) => (
-          <li key={item.title} className={i < 3 ? 'is-done' : undefined} style={{ ['--i' as string]: i }}>
-            <span className="day-check"><Check size={13} strokeWidth={3} /></span>
-            <span className="day-time">{item.time}</span>
-            <span className="day-title">{item.title}</span>
-            <span className="day-tag">{item.tag}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul className="auth-tiles">
+      {TILES.map(({ icon: Icon, title, text }) => (
+        <li key={title}>
+          <span className="auth-tile-icon" aria-hidden="true"><Icon size={18} strokeWidth={2} /></span>
+          <span><strong>{title}</strong><span>{text}</span></span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -73,9 +96,7 @@ function Plans({ signup }: { signup: boolean }) {
           <h3>Free</h3>
           <div className="plan-price">$0<span>forever</span></div>
         </div>
-        <ul className="plan-list">
-          {FREE_FEATURES.map(f => <li key={f.title} title={f.detail}><span aria-hidden="true">{f.icon}</span>{f.title}</li>)}
-        </ul>
+        <p className="plan-desc">Daily routines, to-dos, notes and stats.</p>
         {signup ? (
           <p className="plan-note">After your trial you can stay on Free, no card needed.</p>
         ) : (
@@ -89,10 +110,7 @@ function Plans({ signup }: { signup: boolean }) {
           <h3>Premium</h3>
           <div className="plan-price">{PRICE}<span>{PERIOD}</span></div>
         </div>
-        <p className="plan-lead">Everything in Free, plus:</p>
-        <ul className="plan-list">
-          {PREMIUM_FEATURES.map(f => <li key={f.title} title={f.detail}><span aria-hidden="true">{f.icon}</span>{f.title}</li>)}
-        </ul>
+        <p className="plan-desc">Everything in Free, plus focus tools, spending, student and work planners, and teams.</p>
         {signup ? (
           <p className="plan-note">Included free for 15 days with every new account.</p>
         ) : (
@@ -143,11 +161,10 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
         <BrandLockup size={52} large onDark />
 
         <div className="auth-hero">
-          <h2>Life,<br />organized.</h2>
-          <p>Routines, to-dos and notes in one calm place, synced on every device you sign in on.</p>
+          <RotatingHeadline />
+          <p>Free to start. Works on your phone and computer, always in sync.</p>
+          <FeatureTiles />
         </div>
-
-        <TodayPreview />
 
         <Plans signup={signup} />
       </aside>

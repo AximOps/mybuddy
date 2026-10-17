@@ -1065,3 +1065,31 @@ a.mini-main:hover .title { color: var(--accent); }
 .meet-list-icon { color: var(--accent); vertical-align: -2px; margin-left: 6px; }
 .invite-box { padding: 16px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
 @media (max-width: 560px) { .meet-row { flex-direction: column; } .meet-row .btn { align-self: flex-start; } }
+
+/* ---- Login headline: "Your Day / Life / Money / Work / Study, organized by Amiroon." ---- */
+.auth-hero h2.auth-headline { font-size: clamp(36px, 3.9vw, 54px); line-height: 1.06; margin-bottom: 12px; }
+.auth-headline-line { display: block; white-space: nowrap; }
+.auth-headline-sub { display: block; }
+.auth-headline-sub span { color: var(--sun); }
+.auth-rot { display: inline-block; vertical-align: top; height: 1.06em; overflow: hidden; color: var(--sun); }
+.auth-rot-track { display: block; transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.auth-rot-track.no-anim { transition: none; }
+.auth-rot-track > span { display: block; height: 1.06em; }
+@media (prefers-reduced-motion: reduce) { .auth-rot-track { transition: none; } }
+
+/* Four feature tiles under the headline */
+.auth-tiles { list-style: none; margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 620px; }
+.auth-tiles li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.09); border: 1px solid rgba(255, 255, 255, 0.18); }
+.auth-tile-icon { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(255, 201, 60, 0.18); color: var(--sun); }
+.auth-tiles strong { display: block; font-size: 14.5px; color: #fff; }
+.auth-tiles li > span:last-child > span { display: block; font-size: 12.5px; line-height: 1.4; color: rgba(255, 255, 255, 0.82); }
+.plan-desc { margin: -2px 0 0; font-size: 12.5px; line-height: 1.45; color: rgba(255, 255, 255, 0.88); }
+@media (max-width: 860px) {
+  .auth-split .auth-hero h2.auth-headline { font-size: 36px; }
+  .auth-tiles { gap: 8px; margin-top: 14px; }
+  .auth-tiles li { flex-direction: column; gap: 8px; padding: 12px; }
+  .auth-tile-icon { width: 32px; height: 32px; }
+  .auth-tiles strong { font-size: 14px; }
+  .auth-tiles li > span:last-child > span { font-size: 12px; }
+  .plan-desc { font-size: 13px; }
+}
