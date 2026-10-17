@@ -89,3 +89,8 @@ New files: `lib/sync.ts`, `app/api/mobile/sync/route.ts`. Changed: `app/actions.
 - New optional `MOBILE_WEB_ORIGINS` setting, with `proxy.ts`: lets the app's browser build call the sign-in and
   sync API from its own address (for testing on a computer or phone browser). Native phone apps do not need it.
   The same addresses are added to Better Auth's trusted origins.
+
+## Preview 8
+- New `GET /api/mobile/health` returns `{ app: "amiroon", api: 1, sync: true|false }`. The phone app uses it
+  to check a website address before it saves it. `sync` is false until migration `0021_sync.sql` has run. No
+  personal data.
