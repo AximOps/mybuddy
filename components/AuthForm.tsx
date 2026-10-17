@@ -143,7 +143,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
         <BrandLockup size={52} large onDark />
 
         <div className="auth-hero">
-          <h2>Plan your day,<br />buddy.</h2>
+          <h2>Life,<br />organized.</h2>
           <p>Routines, to-dos and notes in one calm place, synced on every device you sign in on.</p>
         </div>
 
@@ -222,7 +222,7 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
             {signup ? (
               <>Already have an account? <Link href="/login">Log in</Link></>
             ) : (
-              <>New to My Buddy? <Link href="/signup">Create an account</Link></>
+              <>New to Amiroon? <Link href="/signup">Create an account</Link></>
             )}
           </p>
         </div>

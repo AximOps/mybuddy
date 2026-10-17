@@ -60,7 +60,7 @@ export function Sidebar({ showStudent, showWork, showTeam = false, premium, tria
                   <Link href="/settings#plan" className={`btn sm ${left <= 5 ? 'primary' : ''}`}>Subscribe</Link>
                 </>
               );
-            })() : <span className="small muted">Every feature is unlocked. Thanks for supporting My Buddy.</span>}
+            })() : <span className="small muted">Every feature is unlocked. Thanks for supporting Amiroon.</span>}
           </div>
         ) : (
           <div className="sidebar-plan is-free">

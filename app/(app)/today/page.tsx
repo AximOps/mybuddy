@@ -88,7 +88,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     const routines = await listRoutines(c, ws);
     const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: settings.timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
     const period = hour >= 5 && hour < 12 ? ['🌅', 'Good morning'] : hour < 17 ? ['☀️', 'Good afternoon'] : hour < 21 ? ['🌇', 'Good evening'] : ['🌙', 'Good night'];
-    return { ...t, day, today, premium, routines, currency: settings.currency, workMode: settings.mode === 'work', greeting: `${period[1]}, ${(user!.name || 'buddy').split(' ')[0]}`, emoji: period[0] };
+    return { ...t, day, today, premium, routines, currency: settings.currency, workMode: settings.mode === 'work', greeting: `${period[1]}, ${(user!.name || 'there').split(' ')[0]}`, emoji: period[0] };
   });
 
   const { day, today, agenda, tasks, focus, notes, work, spend, premium, nowMin } = data;

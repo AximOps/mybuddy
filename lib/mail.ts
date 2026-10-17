@@ -1,7 +1,7 @@
 /**
  * Sends transactional email through Resend (https://resend.com). Needs two settings in Vercel:
  *   RESEND_API_KEY  the API key from Resend
- *   MAIL_FROM       a sender on a domain you have verified in Resend, e.g. "My Buddy <hello@yourdomain.com>"
+ *   MAIL_FROM       a sender on a domain you have verified in Resend, e.g. "Amiroon <hello@yourdomain.com>"
  * Without them, nothing is sent and the caller falls back to showing the invitation link.
  */
 export interface MailExtras {

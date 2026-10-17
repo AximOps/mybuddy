@@ -13,7 +13,7 @@ export default async function AdminTeams() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Teams</h1><p>Organisations on My Buddy. Team content is never shown here.</p></div>
+        <div><h1>Teams</h1><p>Organisations on Amiroon. Team content is never shown here.</p></div>
         {teams.length ? <span className="badge accent">{teams.length} teams · {members} members</span> : null}
       </div>
       <section className="card flush">

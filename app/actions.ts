@@ -1249,7 +1249,7 @@ export async function emailMeetingNotes(formData: FormData) {
     m.agenda ? `AGENDA\n${m.agenda}\n` : '',
     m.notes ? `NOTES\n${m.notes}\n` : '',
     m.actions.length ? `ACTION ITEMS\n${m.actions.map(a => `${a.done ? '[x]' : '[ ]'} ${a.text}`).join('\n')}\n` : '',
-    `Sent by ${user.name || user.email} from My Buddy.`,
+    `Sent by ${user.name || user.email} from Amiroon.`,
   ].filter((l, i, arr) => l !== '' || arr[i - 1] !== '').join('\n');
   const { sendMail } = await import('@/lib/mail');
   let sent = 0, failed = false, off = false;
@@ -1349,8 +1349,8 @@ export async function inviteMember(formData: FormData) {
   });
   if (!link) return;
   const { sendMail } = await import('@/lib/mail');
-  const result = await sendMail(email, `${inviter} invited you to ${orgName} on My Buddy`,
-    `${inviter} invited you to join ${orgName} on My Buddy.\n\nOpen this link and log in with ${email} to accept:\n${link}\n\nThe link works once and expires in ${INVITE_DAYS} days.`);
+  const result = await sendMail(email, `${inviter} invited you to ${orgName} on Amiroon`,
+    `${inviter} invited you to join ${orgName} on Amiroon.\n\nOpen this link and log in with ${email} to accept:\n${link}\n\nThe link works once and expires in ${INVITE_DAYS} days.`);
   revalidatePath('/teams');
   if (result.sent) redirect(`/teams?team=${orgId}&sent=${encodeURIComponent(email)}`);
   redirect(`/teams?team=${orgId}&invited=${encodeURIComponent(link)}${result.error ? `&mailError=${encodeURIComponent(result.error)}` : ''}`);

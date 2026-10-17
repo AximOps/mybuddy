@@ -22,11 +22,11 @@ export async function GET() {
     return { routines: routines.rows, routineDays: days.rows, events: events.rows, tasks: tasks.rows, notes: notes.rows, focusSessions: focus.rows };
   });
 
-  const body = JSON.stringify({ app: 'my-buddy-web', exportedAt: new Date().toISOString(), data }, null, 2);
+  const body = JSON.stringify({ app: 'amiroon-web', exportedAt: new Date().toISOString(), data }, null, 2);
   return new Response(body, {
     headers: {
       'Content-Type': 'application/json',
-      'Content-Disposition': `attachment; filename="my-buddy-export-${new Date().toISOString().slice(0, 10)}.json"`,
+      'Content-Disposition': `attachment; filename="amiroon-export-${new Date().toISOString().slice(0, 10)}.json"`,
     },
   });
 }

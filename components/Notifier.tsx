@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 
 /**
- * Reminders in the browser. While My Buddy is open (a tab, or the installed app), it fetches the
+ * Reminders in the browser. While Amiroon is open (a tab, or the installed app), it fetches the
  * next timed items and shows a notification a few minutes before each one. Settings live in this
  * browser, so each device can choose its own.
  */
@@ -90,10 +90,10 @@ export function NotificationSettings() {
     if (p === 'granted') update({ ...prefs, enabled: true });
   };
 
-  if (permission === 'unsupported') return <p className="small muted">This browser cannot show notifications. On iPhone, add My Buddy to your Home Screen first, then open it from there.</p>;
+  if (permission === 'unsupported') return <p className="small muted">This browser cannot show notifications. On iPhone, add Amiroon to your Home Screen first, then open it from there.</p>;
   return (
     <div className="stack" style={{ gap: 12 }}>
-      <p className="small muted">Get a notification before meetings, to-dos with a time, classes and note reminders. Reminders come while My Buddy is open in a tab or as the installed app on this device.</p>
+      <p className="small muted">Get a notification before meetings, to-dos with a time, classes and note reminders. Reminders come while Amiroon is open in a tab or as the installed app on this device.</p>
       {permission === 'denied' ? (
         <p className="small" style={{ color: 'var(--danger)' }}>Notifications are blocked for this site. Allow them in your browser&apos;s site settings, then reload.</p>
       ) : prefs.enabled && permission === 'granted' ? (

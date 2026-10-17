@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 const ERRORS: Record<string, string> = {
   phone: 'Enter a valid mobile number. Indian numbers have 10 digits and start with 6, 7, 8 or 9.',
-  mode: 'Choose how you will use My Buddy.',
+  mode: 'Choose how you will use Amiroon.',
   taken: 'This mobile number is already used by another account. Sign in to that account, or use a different number.',
   failed: 'Something went wrong while saving. Please try again.',
 };
@@ -56,7 +56,7 @@ export default async function WelcomePage({ searchParams }: { searchParams: Prom
           </fieldset>
 
           <fieldset className="welcome-step">
-            <legend><span className="step-no">2</span> How will you use My Buddy?</legend>
+            <legend><span className="step-no">2</span> How will you use Amiroon?</legend>
             <div className="mode-cards">
               {MODES.map(m => {
                 const Icon = m.icon;

@@ -1,4 +1,4 @@
-/* My Buddy service worker: keeps the app opening offline and shows reminder notifications.
+/* Amiroon service worker: keeps the app opening offline and shows reminder notifications.
    Pages are fetched from the network first; the last copy of each page is kept for offline use.
    Changes still need a connection. */
 const VERSION = 'mybuddy-v1';

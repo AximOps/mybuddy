@@ -8,7 +8,7 @@ import { buzz, playSound, systemNotify, unlockAudioOnGesture, type SoundId } fro
  * The focus tools that run in the background on every page: regular break reminders, alarms,
  * a stopwatch, and ringing for timed reminders. Everything lives in this browser (localStorage),
  * so it survives refreshes and page changes, and open tabs stay in step. A lock makes sure only
- * one tab rings for each event. Like other browser reminders, they need My Buddy open in a tab or
+ * one tab rings for each event. Like other browser reminders, they need Amiroon open in a tab or
  * as the installed app.
  */
 
@@ -195,7 +195,7 @@ export function ToolsProvider({ children, premium }: { children: ReactNode; prem
       }
       const key = `${dayKey(d)} ${a.time}`, at = atToday(a.time, d);
       if (a.lastFired === key || now < at) return a;
-      // A one-time alarm missed while My Buddy was closed or asleep: mark it, don't roll it to tomorrow.
+      // A one-time alarm missed while Amiroon was closed or asleep: mark it, don't roll it to tomorrow.
       if (now - at > 5 * 60_000) { if (a.days.length) return a; changed = true; return { ...a, lastFired: key, enabled: false }; }
       if (a.days.length && !a.days.includes(d.getDay())) return a;
       changed = true;

@@ -37,7 +37,7 @@ export default async function AdminOverview() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Overview</h1><p>How My Buddy is doing today. Counts only, personal content is never shown.</p></div>
+        <div><h1>Overview</h1><p>How Amiroon is doing today. Counts only, personal content is never shown.</p></div>
         <Link className="btn" href="/admin/users"><Search size={16} aria-hidden="true" /> Find a user</Link>
       </div>
 

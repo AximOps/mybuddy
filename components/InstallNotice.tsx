@@ -10,7 +10,7 @@ type PromptEvent = Event & { prompt: () => Promise<void>; userChoice?: Promise<{
 type Mode = 'hidden' | 'prompt' | 'ios' | 'android';
 
 /**
- * Top-of-Today banner that helps people add My Buddy to their home screen.
+ * Top-of-Today banner that helps people add Amiroon to their home screen.
  * Chrome, Edge and Android offer a one-tap Install button. iPhone and iPad (Safari) need steps.
  * Hidden once the app is installed, after it is dismissed (for 14 days), or on desktop browsers without an install prompt.
  */
@@ -68,11 +68,11 @@ export function InstallNotice() {
   if (mode === 'hidden') return null;
 
   return (
-    <section className="install-notice" aria-label="Add My Buddy to your home screen">
+    <section className="install-notice" aria-label="Add Amiroon to your home screen">
       <div className="install-main">
         <img src="/icons/icon-192.png" alt="" width={44} height={44} className="install-icon" />
         <div>
-          <strong>Add My Buddy to your home screen</strong>
+          <strong>Add Amiroon to your home screen</strong>
           <p className="small muted">Open it like an app, with its own icon and no browser bar.</p>
         </div>
       </div>
@@ -96,7 +96,7 @@ export function InstallNotice() {
           <li>Open this page in <strong>Safari</strong> (install does not work from Chrome on iPhone).</li>
           <li>Tap the <Share size={14} strokeWidth={2} aria-label="Share" className="inline-icon" /> <strong>Share</strong> button at the bottom of the screen.</li>
           <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
-          <li>Tap <strong>Add</strong>. My Buddy appears on your home screen.</li>
+          <li>Tap <strong>Add</strong>. Amiroon appears on your home screen.</li>
         </ol>
       ) : null}
 

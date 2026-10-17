@@ -27,7 +27,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <AdminNav variant="side" />
         <div className="admin-side-foot">
           <p className="admin-side-note">Personal content (tasks, notes, spending, time) is never shown here.</p>
-          <Link href="/today"><ArrowLeft size={17} aria-hidden="true" /> Back to My Buddy</Link>
+          <Link href="/today"><ArrowLeft size={17} aria-hidden="true" /> Back to Amiroon</Link>
         </div>
       </aside>
       <div className="admin-main">

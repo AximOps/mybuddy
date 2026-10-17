@@ -21,7 +21,7 @@ export const auth = betterAuth({
       const { sendMail } = await import('./mail');
       const result = await sendMail(
         user.email,
-        'Reset your My Buddy password',
+        'Reset your Amiroon password',
         `Hi ${user.name || 'there'},\n\nUse this link to choose a new password. It expires in one hour:\n${url}\n\nIf you did not ask for this, you can ignore this email. Your password stays the same.`,
       );
       // Without email set up, the link is printed in the server log while developing only.
