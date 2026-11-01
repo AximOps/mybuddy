@@ -3,6 +3,7 @@ import { formatPhone } from '@/lib/phone';
 import { CopyField } from '@/components/CopyField';
 import { NotificationSettings } from '@/components/Notifier';
 import { disableCalendarFeed, resetCalendarFeed } from '@/app/actions';
+import { disconnectApp } from '@/app/connect/actions';
 import { deleteCustomTag, resetAllData, resetTodayProgress, updateAppearance, updateMode, updateProfile, updateSettings, updateStudentTools } from '@/app/actions';
 import { withUser } from '@/lib/db';
 import { CURRENCIES, getSettings } from '@/lib/settings';
@@ -21,7 +22,9 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   const data = await withUser(user!.id, async c => {
     const settings = await getSettings(c, user!.id);
-    return { calendarToken: (await c.query<{ t: string | null }>(`select calendar_token as t from user_settings where user_id = $1`, [user!.id])).rows[0]?.t ?? null, settings, tags: await customTags(c, user!.id, 'task'), notes: await customTags(c, user!.id, 'note'), spend: await customTags(c, user!.id, 'spend'), today: dateKeyIn(settings.timezone) };
+    const apps = (await c.query<{ id: string; client: string; created_at: string; last_used_at: string | null }>(
+      `select id, client, created_at::text, last_used_at::text from app_grants where user_id = $1 and revoked_at is null order by created_at desc`, [user!.id])).rows;
+    return { apps, calendarToken: (await c.query<{ t: string | null }>(`select calendar_token as t from user_settings where user_id = $1`, [user!.id])).rows[0]?.t ?? null, settings, tags: await customTags(c, user!.id, 'task'), notes: await customTags(c, user!.id, 'note'), spend: await customTags(c, user!.id, 'spend'), today: dateKeyIn(settings.timezone) };
   });
   const { settings } = data;
   const h = await headers();
@@ -133,6 +136,23 @@ export default async function SettingsPage() {
             ) : (
               <form action={resetCalendarFeed}><button className="btn primary" type="submit">Create my calendar link</button></form>
             )}
+          </div>
+        </section>
+
+        <section className="card flush" id="connected-apps">
+          <div className="card-head"><h2>Connected apps</h2>{data.apps.length ? <span className="badge success">{data.apps.length}</span> : null}</div>
+          <div className="card-body stack" style={{ gap: 12 }}>
+            {data.apps.length ? data.apps.map(a => (
+              <div key={a.id} className="row" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div>
+                  <b>{a.client === 'autopilot' ? 'Autopilot by Opseros' : a.client}</b>
+                  <div className="small muted">Reads your time entries, meetings, focus sessions and finished to-dos for your Teamwork timesheet.
+                    Connected {new Date(a.created_at).toLocaleDateString('en-IN', { timeZone: settings.timezone, day: 'numeric', month: 'short', year: 'numeric' })}
+                    {a.last_used_at ? ` · last used ${new Date(a.last_used_at).toLocaleString('en-IN', { timeZone: settings.timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}</div>
+                </div>
+                <form action={disconnectApp}><input type="hidden" name="id" value={a.id} /><button className="btn sm ghost danger" type="submit">Disconnect</button></form>
+              </div>
+            )) : <p className="small muted">No apps connected. To fill your Teamwork timesheet from My Buddy, open Autopilot by Opseros → Settings → Connect MyBuddy.</p>}
           </div>
         </section>
 

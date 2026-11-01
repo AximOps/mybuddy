@@ -121,7 +121,7 @@ function Plans({ signup }: { signup: boolean }) {
   );
 }
 
-export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; googleEnabled: boolean; appleEnabled: boolean }) {
+export function AuthForm({ mode, googleEnabled, appleEnabled, next }: { mode: Mode; googleEnabled: boolean; appleEnabled: boolean; next?: string }) {
   const router = useRouter();
   const [name, setName] = useState('');
   const [country, setCountry] = useState('91');
@@ -132,6 +132,8 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const signup = mode === 'signup';
+  // After logging in, go back to where the person came from (only pages on this site), else to Today.
+  const after = next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/today';
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -139,18 +141,18 @@ export function AuthForm({ mode, googleEnabled, appleEnabled }: { mode: Mode; go
     setBusy(true); setError(null);
     const result = signup
       ? await authClient.signUp.email({ name, email, password, callbackURL: '/today' })
-      : await authClient.signIn.email({ email, password, callbackURL: '/today' });
+      : await authClient.signIn.email({ email, password, callbackURL: after });
     setBusy(false);
     if (result.error) {
       setError(result.error.message ?? 'Something went wrong. Please try again.');
       return;
     }
-    router.push(signup ? `/welcome?phone=${encodeURIComponent(phone)}&country=${country}` : '/today');
+    router.push(signup ? `/welcome?phone=${encodeURIComponent(phone)}&country=${country}` : after);
   };
 
   const social = async (provider: 'google' | 'apple') => {
     setError(null);
-    const result = await authClient.signIn.social({ provider, callbackURL: '/today' });
+    const result = await authClient.signIn.social({ provider, callbackURL: after });
     if (result?.error) setError(result.error.message ?? 'Sign-in did not finish.');
   };
 
