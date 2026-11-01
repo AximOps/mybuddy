@@ -1123,3 +1123,18 @@ a.mini-main:hover .title { color: var(--accent); }
   .add-dialog-body .form-grid > [class*="span-"] { grid-column: span 12; }
 }
 @media (prefers-reduced-motion: reduce) { .add-dialog[open] { animation: none; } }
+
+/* Work on Today and the Teamwork timesheet link */
+.kind-work { --kind: #2a78d6; }
+.kind-plan { --kind: #7048e8; }
+.week-event.kind-work, .week-chip.kind-work { --kind: #2a78d6; }
+.week-event.kind-plan, .week-chip.kind-plan { --kind: #7048e8; }
+.agenda-end .badge { white-space: nowrap; }
+.plan-add > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; }
+.plan-add .form-grid { margin-top: 12px; }
+.tw-task { margin-top: 4px; }
+.tw-task > summary { cursor: pointer; }
+.tw-task .assign-pop { left: 0; right: auto; width: 300px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .kind-work { --kind: #3987e5; } :root:not([data-theme="light"]) .kind-plan { --kind: #9775fa; } }
+:root[data-theme="dark"] .kind-work { --kind: #3987e5; }
+:root[data-theme="dark"] .kind-plan { --kind: #9775fa; }

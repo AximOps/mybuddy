@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { AddDialog } from '@/components/AddDialog';
-import { ArrowRight, Bell, CalendarRange, Briefcase, Check, Lock, NotebookPen, Pin, Plus, Timer, Wallet } from 'lucide-react';
-import { addEvent, addTask, moveUnfinishedTasks, setTaskDone, stopTimer, toggleDayCheck, toggleDeadline, toggleEvent } from '@/app/actions';
+import { ArrowRight, Bell, CalendarRange, Briefcase, Check, ClipboardCheck, Lock, NotebookPen, Pin, Plus, Timer, Wallet, X } from 'lucide-react';
+import { addEvent, addTask, addWorkPlan, deleteWorkPlan, moveUnfinishedTasks, setTaskDone, stopTimer, toggleDayCheck, toggleDeadline, toggleEvent, toggleWorkPlan } from '@/app/actions';
+import { TwTaskPicker } from '@/components/work/TwTaskPicker';
+import { autopilotHome, autopilotLinked, loadCatalog } from '@/lib/timesheet';
 import { withUser } from '@/lib/db';
 import { listRoutines, personalWorkspaceId } from '@/lib/planner';
 import { Hero } from '@/components/Hero';
@@ -20,11 +22,36 @@ import { postDueBills } from '@/lib/spending';
 export const dynamic = 'force-dynamic';
 
 const KIND_LABEL: Record<AgendaItem['kind'], string> = {
-  routine: 'Routine', meeting: 'Meeting', class: 'Class', task: 'To-do', deadline: 'Deadline', reminder: 'Reminder', focus: 'Focus',
+  routine: 'Routine', meeting: 'Meeting', class: 'Class', task: 'To-do', deadline: 'Deadline', reminder: 'Reminder', focus: 'Focus', work: 'Work', plan: 'Planned',
 };
+
+/** Right-hand end of a timeline row: status label, Done, remove (planned blocks) and the open link. */
+function AgendaEnd({ a }: { a: AgendaItem }) {
+  return (
+    <div className="agenda-end">
+      {a.badge ? <span className={`badge ${a.badge.tone}`}>{a.badge.text}</span> : a.done ? <DonePill /> : null}
+      {a.removePlan ? (
+        <form action={deleteWorkPlan}><input type="hidden" name="id" value={a.removePlan} />
+          <button type="submit" className="agenda-link" aria-label={`Remove ${a.title}`} title="Remove from plan"><X size={15} /></button></form>
+      ) : null}
+      {a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}
+    </div>
+  );
+}
 
 function ToggleForm({ item, day }: { item: AgendaItem; day: string }) {
   const t = item.toggle!;
+  if (t.action === 'plan') {
+    return (
+      <form action={toggleWorkPlan}>
+        <input type="hidden" name="id" value={t.id} />
+        <button type="submit" className={`check ${item.done ? 'on' : ''}`} aria-label={item.done ? `Undo ${item.title}` : `Mark ${item.title} done and log the time`}
+          title={item.done ? 'Undo (removes the time entry)' : 'Done: saves it as a time entry'}>
+          {item.done ? <Check size={14} strokeWidth={3} /> : null}
+        </button>
+      </form>
+    );
+  }
   const action = t.action === 'event' ? toggleEvent : t.action === 'task' ? setTaskDone : t.action === 'check' ? toggleDayCheck : toggleDeadline;
   return (
     <form action={action}>
@@ -82,22 +109,30 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     const ws = await personalWorkspaceId(c, user!.id);
     const premium = isPremium(settings);
     if (premium) await postDueBills(c, user!.id, ws, today);
+    const autopilot = premium && await autopilotLinked(c, user!.id);
     const t = await loadToday(c, {
-      ws, userId: user!.id, day, today, tz: settings.timezone, premium,
+      ws, userId: user!.id, day, today, tz: settings.timezone, premium, autopilot,
       student: settings.studentEnabled, workMode: settings.mode === 'work', budgetMinor: settings.monthlyBudgetMinor,
     });
+    // For "Plan a work block": projects in every workspace the person can see, and their Teamwork tasks.
+    const workProjects = premium ? (await c.query<{ id: string; name: string; client: string | null; tw_project_id: string | null }>(
+      `select p.id, p.name, cl.name as client, p.tw_project_id::text as tw_project_id from projects p
+         left join clients cl on cl.id = p.client_id where p.deleted_at is null order by p.name limit 200`)).rows
+      .map(p => ({ id: p.id, name: p.name, client: p.client, twProjectId: p.tw_project_id ? Number(p.tw_project_id) : null })) : [];
+    const catalog = autopilot ? (await loadCatalog(c, user!.id))?.projects ?? [] : null;
     const routines = await listRoutines(c, ws);
     const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: settings.timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
     const period = hour >= 5 && hour < 12 ? ['🌅', 'Good morning'] : hour < 17 ? ['☀️', 'Good afternoon'] : hour < 21 ? ['🌇', 'Good evening'] : ['🌙', 'Good night'];
-    return { ...t, day, today, premium, routines, currency: settings.currency, workMode: settings.mode === 'work', greeting: `${period[1]}, ${(user!.name || 'there').split(' ')[0]}`, emoji: period[0] };
+    return { ...t, day, today, premium, routines, autopilot, workProjects, catalog, tz: settings.timezone, currency: settings.currency, workMode: settings.mode === 'work', greeting: `${period[1]}, ${(user!.name || 'there').split(' ')[0]}`, emoji: period[0] };
   });
 
-  const { day, today, agenda, tasks, focus, notes, work, spend, premium, nowMin } = data;
+  const { day, today, agenda, tasks, focus, notes, work, spend, premium, nowMin, timesheet } = data;
+  const apHome = autopilotHome();
   const isToday = day === today;
   const percent = data.routineTotal ? Math.round((data.routineDone / data.routineTotal) * 100) : 0;
   const timed = agenda.filter(a => a.startMin !== null);
   const untimed = agenda.filter(a => a.startMin === null);
-  const next = isToday ? timed.find(a => !a.done && a.kind !== 'focus' && (a.endMin ?? a.startMin!) >= (nowMin ?? 0)) : timed.find(a => !a.done && a.kind !== 'focus');
+  const next = isToday ? timed.find(a => !a.done && a.kind !== 'focus' && a.kind !== 'work' && (a.endMin ?? a.startMin!) >= (nowMin ?? 0)) : timed.find(a => !a.done && a.kind !== 'focus' && a.kind !== 'work');
   const nowIndex = nowMin === null ? -1 : timed.findIndex(a => (a.startMin ?? 0) > nowMin);
   const openTasks = tasks.overdue.length + tasks.today.filter(t => !t.done).length;
   const dayLabel = isToday ? 'today' : 'on this day';
@@ -195,7 +230,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       <span className="title">{a.kind === 'routine' || a.kind === 'task' || a.kind === 'deadline' ? `${a.emoji} ` : ''}{a.title}</span>
                       <span className="agenda-meta"><span className={`kind-chip kind-${a.kind}`}>{KIND_LABEL[a.kind]}</span><span className="small muted">{a.meta}</span>{a.streak && a.streak >= 2 ? <span className="streak-chip" title={`${a.streak} scheduled days in a row`}>🔥 {a.streak}</span> : null}</span>
                     </div>
-                    <div className="agenda-end">{a.done ? <DonePill /> : null}{a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}</div>
+                    <AgendaEnd a={a} />
                   </div>
                 </li>
               ))}
@@ -210,7 +245,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       <span className="title">{a.title}</span>
                       <span className="agenda-meta"><span className={`kind-chip kind-${a.kind}`}>{KIND_LABEL[a.kind]}</span><span className="small muted">{a.meta}</span></span>
                     </div>
-                    <div className="agenda-end">{a.done ? <DonePill /> : null}{a.href ? <Link href={a.href} className="agenda-link" aria-label={`Open ${a.title}`}><ArrowRight size={16} /></Link> : null}</div>
+                    <AgendaEnd a={a} />
                   </div>
                 </li>
               ))}
@@ -298,7 +333,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                 {work.timer ? (
                   <div className="timer-strip">
                     <span className="focus-dot on" aria-hidden="true" />
-                    <div className="mini-main"><strong>{work.timer.project}</strong><span className="small muted">{work.timer.note || 'Timer running'}</span></div>
+                    <div className="mini-main"><strong>{work.timer.project}</strong><span className="small muted">{work.timer.note || 'Timer running'}{work.timer.twTask ? ` · Teamwork: ${work.timer.twTask}` : ''}</span></div>
                     <strong className="num"><Elapsed startedAt={work.timer.startedAt} /></strong>
                     <form action={stopTimer}><button className="btn sm" type="submit">Stop</button></form>
                   </div>
@@ -310,6 +345,41 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   <div><span className="small muted">Open actions</span><strong className="num">{work.openActions}</strong></div>
                 </div>
                 {!work.timer && isToday ? <Link href="/work" className="btn block">Start a timer</Link> : null}
+                {data.workProjects.length ? (
+                  <details className="panel plan-add" open={work.plans === 0 && !!timesheet}>
+                    <summary><Plus size={15} aria-hidden="true" /> Plan a work block</summary>
+                    <form action={addWorkPlan} className="form-grid">
+                      <input type="hidden" name="day" value={day} />
+                      {data.catalog ? <TwTaskPicker projects={data.workProjects} catalog={data.catalog} projectSpan="span-12" taskSpan="span-12" />
+                        : <label className="field span-12">Project<select className="select" name="projectId" required>{data.workProjects.map(p => <option key={p.id} value={p.id}>{p.name}{p.client ? ` · ${p.client}` : ''}</option>)}</select></label>}
+                      <label className="field span-6">Starts<input className="input" name="start" type="time" required /></label>
+                      <label className="field span-6">Ends<input className="input" name="end" type="time" required /></label>
+                      <label className="field span-12">What (optional)<input className="input" name="note" maxLength={160} placeholder="e.g. Patch web servers" /></label>
+                      <p className="small muted span-12" style={{ margin: 0 }}>Tick it off on the timeline when done: it is saved as a time entry{data.catalog ? ' and goes to your Teamwork timesheet through Autopilot' : ''}.</p>
+                      <div className="span-12" style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Add to my day</button></div>
+                    </form>
+                  </details>
+                ) : <p className="small muted" style={{ margin: 0 }}>Add a project in <Link href="/work?tab=projects">Work → Projects</Link> to plan work blocks here.</p>}
+              </div>
+            </section>
+          ) : null}
+
+          {timesheet ? (
+            <section className="card flush">
+              <div className="card-head"><h2><ClipboardCheck size={16} aria-hidden="true" className="h-icon" /> Timesheet</h2>{apHome ? <a href={apHome} target="_blank" rel="noopener noreferrer">Open Autopilot</a> : null}</div>
+              <div className="card-body stack" style={{ gap: 10 }}>
+                {timesheet.loggedMinutes === null ? (
+                  <div className="small muted">Nothing from Teamwork for this day yet. It updates when you open the timesheet in Autopilot.</div>
+                ) : (
+                  <>
+                    <div className="split-stat"><strong className="num">{hmText(timesheet.loggedMinutes)}</strong><span className="small muted">{timesheet.targetMinutes ? `of ${hmText(timesheet.targetMinutes)} in Teamwork` : 'in Teamwork'}</span></div>
+                    {timesheet.targetMinutes ? <div className="progress" title="Teamwork hours against the daily target"><span style={{ width: `${Math.min(100, Math.round((timesheet.loggedMinutes / timesheet.targetMinutes) * 100))}%` }} /></div> : null}
+                  </>
+                )}
+                {timesheet.unsentCount ? (
+                  <div className="small"><span className="badge warn">{timesheet.unsentCount} not sent</span> {hmText(timesheet.unsentMinutes)} in My Buddy is not in Teamwork yet{timesheet.noTaskCount ? `, ${timesheet.noTaskCount} without a Teamwork task` : ''}. In Autopilot press <strong>From MyBuddy</strong> on this day.</div>
+                ) : <div className="small muted">Everything logged in My Buddy {dayLabel} is in Teamwork. ✓</div>}
+                {timesheet.updatedAt ? <div className="small muted">Teamwork hours as of {timesheet.updatedAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: data.tz })}</div> : null}
               </div>
             </section>
           ) : null}

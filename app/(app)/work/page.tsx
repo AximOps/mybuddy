@@ -1,10 +1,12 @@
 import { PremiumGate } from '@/components/PremiumGate';
 import { AddDialog } from '@/components/AddDialog';
 import Link from 'next/link';
-import { addClient, addMeeting, addMeetingAction, addProject, addTimeEntry, actionToTask, createInvoice, emailMeetingNotes, deleteClient, deleteMeeting, deleteMeetingAction, deleteProject, deleteTimeEntry, sendMeetingInvite, startTimer, stopTimer, toggleMeetingAction, updateMeeting } from '@/app/actions';
+import { addClient, addMeeting, addMeetingAction, addProject, addTimeEntry, linkProjectTeamwork, setEntryTwTask, actionToTask, createInvoice, emailMeetingNotes, deleteClient, deleteMeeting, deleteMeetingAction, deleteProject, deleteTimeEntry, sendMeetingInvite, startTimer, stopTimer, toggleMeetingAction, updateMeeting } from '@/app/actions';
 import { CalendarPlus, Video } from 'lucide-react';
 import { MEET_NEW_URL, callLabel } from '@/lib/meeting-link';
 import { Elapsed } from '@/components/work/Elapsed';
+import { TwTaskPicker } from '@/components/work/TwTaskPicker';
+import { autopilotHome, autopilotLinked, loadCatalog, type TwProject } from '@/lib/timesheet';
 import { withUser } from '@/lib/db';
 import { getCurrentUser } from '@/lib/session';
 import { getSettings, money } from '@/lib/settings';
@@ -47,11 +49,13 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
         where m.user_id = $1 order by w.kind, w.name`, [user!.id])).rows;
     const activeKind = wsList.find(w => w.id === ws)?.kind ?? 'personal';
     const isAdmin = (await c.query<{ a: boolean }>(`select is_workspace_admin($1) as a`, [ws])).rows[0].a;
-    const timer = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string } | null }>(
+    const timer = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string; twTask?: string } | null }>(
       `select work_timer from user_settings where user_id = $1`, [user!.id])).rows[0]?.work_timer ?? null;
     const clients = (await c.query<{ id: string; name: string }>(`select id, name from clients where workspace_id = $1 and deleted_at is null order by name`, [ws])).rows;
-    const projects = (await c.query<{ id: string; name: string; client_id: string | null; client_name: string | null; hourly_rate_minor: number }>(
-      `select p.id, p.name, p.client_id, cl.name as client_name, p.hourly_rate_minor from projects p
+    const linked = await autopilotLinked(c, user!.id);
+    const catalog = linked ? await loadCatalog(c, user!.id) : null;
+    const projects = (await c.query<{ id: string; name: string; client_id: string | null; client_name: string | null; hourly_rate_minor: number; tw_project_id: string | null; tw_project: string | null }>(
+      `select p.id, p.name, p.client_id, cl.name as client_name, p.hourly_rate_minor, p.tw_project_id::text as tw_project_id, p.tw_project from projects p
          left join clients cl on cl.id = p.client_id where p.workspace_id = $1 and p.deleted_at is null order by p.name`, [ws])).rows;
 
     // Timesheet week (offset from the current week, 0 = this week)
@@ -61,8 +65,9 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
     const monday = shiftDateKey(today, -dow + weekOffset * 7);
     const sunday = shiftDateKey(monday, 6);
     const weekDays = Array.from({ length: 7 }, (_, i) => shiftDateKey(monday, i));
-    const entries = (await c.query<{ id: string; project_id: string; project_name: string; spent_on: string; start_min: number; end_min: number; billable: boolean; note: string }>(
-      `select e.id, e.project_id, p.name as project_name, e.spent_on::text as spent_on, e.start_min, e.end_min, e.billable, e.note
+    const entries = (await c.query<{ id: string; project_id: string; project_name: string; spent_on: string; start_min: number; end_min: number; billable: boolean; note: string; tw_task_id: string | null; tw_task: string | null; tw_logged_at: Date | null }>(
+      `select e.id, e.project_id, p.name as project_name, e.spent_on::text as spent_on, e.start_min, e.end_min, e.billable, e.note,
+              e.tw_task_id::text as tw_task_id, e.tw_task, e.tw_logged_at
          from time_entries e join projects p on p.id = e.project_id
         where e.workspace_id = $1 and e.deleted_at is null and e.spent_on >= $2 and e.spent_on <= $3
         order by e.spent_on, e.start_min`, [ws, monday, sunday])).rows;
@@ -99,7 +104,7 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
          from timesheets t join "user" u on u.id = t.user_id
         where t.workspace_id = $1 and t.status = 'submitted' order by t.submitted_at`, [ws])).rows : [];
     return {
-      members, settings, today, timer, clients, projects, weekDays, monday, sunday, entries, meetings, meeting, actions, from, to, clientFilter, lines, people, invoices, wsList, ws, activeKind, isAdmin, timesheet, approvals };
+      linked, catalog, members, settings, today, timer, clients, projects, weekDays, monday, sunday, entries, meetings, meeting, actions, from, to, clientFilter, lines, people, invoices, wsList, ws, activeKind, isAdmin, timesheet, approvals };
   });
 
   const cur = data.settings.currency;
@@ -108,6 +113,11 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
   const tabLink = (t: Tab, label: string) => <Link href={`/work?tab=${t}`} aria-current={tab === t ? 'true' : undefined}>{label}</Link>;
   const timerProject = data.timer ? data.projects.find(p => p.id === data.timer!.projectId) : null;
   const projectOptions = data.projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.client_name ? ` · ${p.client_name}` : ''}</option>);
+  // Teamwork fields only for people connected to Autopilot
+  const tw: TwProject[] | null = data.linked ? data.catalog?.projects ?? [] : null;
+  const pickerProjects = data.projects.map(p => ({ id: p.id, name: p.name, client: p.client_name, twProjectId: p.tw_project_id ? Number(p.tw_project_id) : null }));
+  const twGroups = (tw ?? []).map(p => <optgroup key={p.id} label={p.name}>{p.tasks.map(t => <option key={t.id} value={t.id}>{t.name}{t.tasklist ? ` · ${t.tasklist}` : ''}</option>)}</optgroup>);
+  const apHome = autopilotHome();
 
   // Emails for invites and notes: addresses typed in Attendees, plus teammates named there.
   const inviteTo = data.meeting ? [...(data.meeting.attendees.match(/[^\s,;<>"]+@[^\s,;<>"]+\.[^\s,;<>"]+/g) ?? []),
@@ -134,7 +144,7 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
             {data.timer && timerProject ? (
               <div className="actions" style={{ justifyContent: 'space-between' }}>
                 <div>
-                  <div className="small muted">Timer running · {timerProject.name}</div>
+                  <div className="small muted">Timer running · {timerProject.name}{data.timer.twTask ? ` · Teamwork: ${data.timer.twTask}` : ''}</div>
                   <div style={{ fontSize: 32, fontWeight: 650 }}><Elapsed startedAt={data.timer.startedAt} /></div>
                   {data.timer.note ? <div className="small muted">{data.timer.note}</div> : null}
                 </div>
@@ -142,13 +152,20 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
               </div>
             ) : (
               <form action={startTimer} className="form-grid">
-                <label className="field span-4">Project<select className="select" name="projectId" required>{projectOptions}</select></label>
-                <label className="field span-6">What are you working on? (optional)<input className="input" name="note" maxLength={160} /></label>
+                {tw && data.projects.length ? <TwTaskPicker projects={pickerProjects} catalog={tw} projectSpan="span-3" taskSpan="span-3" />
+                  : <label className="field span-4">Project<select className="select" name="projectId" required>{projectOptions}</select></label>}
+                <label className={`field ${tw ? 'span-4' : 'span-6'}`}>What are you working on? (optional)<input className="input" name="note" maxLength={160} /></label>
                 <div className="span-2" style={{ display: 'flex', alignItems: 'flex-end' }}><button className="btn primary block" type="submit" disabled={data.projects.length === 0}>Start timer</button></div>
                 {data.projects.length === 0 ? <p className="small muted span-12">Add a project in the Projects tab first.</p> : null}
               </form>
             )}
           </section>
+
+          {tw && tw.length === 0 ? (
+            <div className="notice" role="status" style={{ marginBottom: 16 }}><span>🔗</span><div>
+              <strong>Autopilot is connected.</strong> To pick Teamwork tasks here, open {apHome ? <a href={apHome} target="_blank" rel="noopener noreferrer">Autopilot</a> : 'Autopilot'} → Settings → MyBuddy → <em>Send my Teamwork tasks</em>.
+            </div></div>
+          ) : null}
 
           <div className="actions" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
             <Link className="btn" href={`/work?tab=time&week=${(Number(sp.week ?? 0) || 0) - 1}`}>‹ Previous week</Link>
@@ -189,7 +206,21 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                   return dayEntries.map(e => (
                     <tr key={e.id}>
                       <td>{DAY[i]} {d.slice(8)}</td>
-                      <td><strong>{e.project_name}</strong>{e.note ? <div className="small muted">{e.note}</div> : null}{e.billable ? null : <span className="badge"> non-billable</span>}</td>
+                      <td><strong>{e.project_name}</strong>{e.note ? <div className="small muted">{e.note}</div> : null}{e.billable ? null : <span className="badge"> non-billable</span>}
+                        {tw ? (e.tw_logged_at ? <div className="small"><span className="badge success">✓ In timesheet</span> {e.tw_task}</div>
+                          : (
+                            <details className="assign tw-task">
+                              <summary className="small">{e.tw_task ? <>Teamwork: <strong>{e.tw_task}</strong></> : <span className="muted">+ Teamwork task</span>}</summary>
+                              <form action={setEntryTwTask} className="assign-pop">
+                                <input type="hidden" name="id" value={e.id} />
+                                <label className="field">Teamwork task
+                                  <select className="select" name="twTaskId" defaultValue={e.tw_task_id ?? ''}><option value="">— Not for the timesheet —</option>{twGroups}</select>
+                                </label>
+                                <button className="btn primary sm" type="submit">Save</button>
+                              </form>
+                            </details>
+                          )) : null}
+                      </td>
                       <td className="num">{fmtMinutes(e.start_min)} – {fmtMinutes(e.end_min)}</td>
                       <td className="num">{hmText(e.end_min - e.start_min)}</td>
                       <td className="action-col"><form action={deleteTimeEntry}><input type="hidden" name="id" value={e.id} /><button className="btn ghost sm danger" type="submit" aria-label="Delete entry">Delete</button></form></td>
@@ -203,7 +234,8 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
           <details className="card panel">
             <summary className="card-body"><strong>+ Add time manually</strong></summary>
             <form action={addTimeEntry} className="form-grid" style={{ padding: '0 18px 18px' }}>
-              <label className="field span-4">Project<select className="select" name="projectId" required>{projectOptions}</select></label>
+              {tw && data.projects.length ? <TwTaskPicker projects={pickerProjects} catalog={tw} projectSpan="span-6" taskSpan="span-6" />
+                : <label className="field span-4">Project<select className="select" name="projectId" required>{projectOptions}</select></label>}
               <label className="field span-3">Date<input className="input" type="date" name="day" required defaultValue={data.today} /></label>
               <label className="field span-2">Starts<input className="input" type="time" name="start" required /></label>
               <label className="field span-2">Ends<input className="input" type="time" name="end" required /></label>
@@ -253,18 +285,32 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                 <label className="field">Project name<input className="input" name="name" required maxLength={80} /></label>
                 <label className="field">Client (optional)<select className="select" name="clientId" defaultValue=""><option value="">No client</option>{data.clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
                 <label className="field">Hourly rate ({cur}, optional)<input className="input" name="rate" inputMode="decimal" placeholder="e.g. 1500" /></label>
+                {tw ? <label className="field">Teamwork project (for the timesheet)<select className="select" name="twProjectId" defaultValue=""><option value="">Not linked</option>{tw.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label> : null}
                 <button className="btn primary block" type="submit">Add project</button>
               </form>
               </AddDialog>
             ) : (
               <table className="table">
-                <thead><tr><th>Project</th><th>Client</th><th>Rate per hour</th><th className="action-col" aria-label="Actions" /></tr></thead>
+                <thead><tr><th>Project</th><th>Client</th><th>Rate per hour</th>{tw ? <th>Teamwork project</th> : null}<th className="action-col" aria-label="Actions" /></tr></thead>
                 <tbody>
                   {data.projects.map(p => (
                     <tr key={p.id}>
                       <td><strong>{p.name}</strong></td>
                       <td>{p.client_name ?? <span className="muted">No client</span>}</td>
                       <td className="num">{p.hourly_rate_minor ? money(p.hourly_rate_minor, cur) : <span className="muted">Not set</span>}</td>
+                      {tw ? (
+                        <td>
+                          <form action={linkProjectTeamwork} className="actions">
+                            <input type="hidden" name="id" value={p.id} />
+                            <select className="select" name="twProjectId" defaultValue={p.tw_project_id ?? ''} style={{ width: 200, height: 34 }} aria-label={`Teamwork project for ${p.name}`}>
+                              <option value="">Not linked</option>
+                              {p.tw_project_id && !tw.some(x => String(x.id) === p.tw_project_id) ? <option value={p.tw_project_id}>{p.tw_project}</option> : null}
+                              {tw.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                            </select>
+                            <button className="btn ghost sm" type="submit">Save</button>
+                          </form>
+                        </td>
+                      ) : null}
                       <td className="action-col"><form action={deleteProject}><input type="hidden" name="id" value={p.id} /><button className="btn ghost sm danger" type="submit">Delete</button></form></td>
                     </tr>
                   ))}
@@ -279,6 +325,7 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                 <label className="field">Project name<input className="input" name="name" required maxLength={80} /></label>
                 <label className="field">Client (optional)<select className="select" name="clientId" defaultValue=""><option value="">No client</option>{data.clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
                 <label className="field">Hourly rate ({cur}, optional)<input className="input" name="rate" inputMode="decimal" placeholder="e.g. 1500" /></label>
+                {tw ? <label className="field">Teamwork project (for the timesheet)<select className="select" name="twProjectId" defaultValue=""><option value="">Not linked</option>{tw.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label> : null}
                 <button className="btn primary block" type="submit">Add project</button>
               </form>
             </section>

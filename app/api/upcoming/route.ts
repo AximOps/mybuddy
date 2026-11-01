@@ -22,7 +22,7 @@ export async function GET() {
     for (const day of [today, shiftDateKey(today, 1)]) {
       const t = await loadToday(c, { ws, userId: user.id, day, today, tz: settings.timezone, premium: isPremium(settings), student: settings.studentEnabled, workMode: settings.mode === 'work', budgetMinor: null });
       for (const a of t.agenda) {
-        if (a.startMin === null || a.done || a.kind === 'focus') continue;
+        if (a.startMin === null || a.done || a.kind === 'focus' || a.kind === 'work') continue;
         out.push({
           key: `${a.key}|${day}`, kind: a.kind, title: `${a.emoji} ${a.title}`,
           body: `${fmtMinutes(a.startMin)}${a.endMin !== null ? `–${fmtMinutes(a.endMin)}` : ''} · ${a.meta}`,

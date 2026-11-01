@@ -59,7 +59,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
       </div>
       <div className="week-legend small">
         <span className="kind-chip kind-routine">Routine</span><span className="kind-chip kind-task">To-do</span><span className="kind-chip kind-meeting">Meeting</span>
-        <span className="kind-chip kind-class">Class</span><span className="kind-chip kind-reminder">Reminder</span><span className="kind-chip kind-focus">Focus</span>
+        <span className="kind-chip kind-class">Class</span><span className="kind-chip kind-reminder">Reminder</span><span className="kind-chip kind-focus">Focus</span><span className="kind-chip kind-work">Work</span><span className="kind-chip kind-plan">Planned</span>
         <span className="muted">Dashed items can be dragged.</span>
       </div>
       <section className="card week-card"><WeekBoard days={days} nowMin={data.nowMin} /></section>

@@ -35,3 +35,14 @@ Autopilot reads a day's time entries, meetings, focus sessions and finished to-d
   code single-use / expiry / wrong return address refused, reconnect replaces the old token, revoke works,
   people can't see or revoke others' connections or time entries; day queries return the expected rows.
 - Autopilot end to end against a stand-in that follows these endpoints exactly (connect → import → disconnect).
+
+## Timesheet link (migration 0024)
+- Work → Projects: each project can point to a Teamwork project (only shown to people connected to Autopilot).
+- Time entries, the timer and planned blocks carry a Teamwork task, picked from the list Autopilot sends.
+  Picking a task on an unlinked project links that project automatically.
+- Autopilot marks entries it has logged ("In timesheet"); they are not offered again.
+- Today: time entries, the running timer and planned work blocks are on the timeline. Ticking a planned block
+  off saves it as a time entry. A Timesheet card shows Teamwork hours vs target and what is not sent yet.
+- New Autopilot endpoints: POST /api/integrations/autopilot/catalog, /status, /logged. The day endpoint now
+  returns `teamwork`, `loggedAt`, `logId` on time entries, and `plans`.
+- Deploy: `npm run db:migrate` (adds 0024), then redeploy. No new environment variables.

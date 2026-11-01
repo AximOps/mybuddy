@@ -15,6 +15,7 @@ import { cookies } from 'next/headers';
 import { getCurrentUser } from '@/lib/session';
 import { dateKeyIn, isDateKey, isUuid, parseHM, shiftDateKey, weekdayOf } from '@/lib/time';
 import { isRepeat, setTaskDoneIn } from '@/lib/tasks';
+import { loadCatalog, pickFromForm } from '@/lib/timesheet';
 
 async function requireUser() {
   const user = await getCurrentUser();
@@ -987,10 +988,12 @@ export async function addProject(formData: FormData) {
   const rateRaw = String(formData.get('rate') ?? '').trim();
   const rate = rateRaw === '' ? 0 : parseMoney(rateRaw);
   if (!name || rate === null) return;
+  const twProjectId = Number(formData.get('twProjectId') ?? 0) || null;
   await withUser(user.id, async c => {
     const ws = await activeWorkspaceId(c, user.id);
-    await c.query(`insert into projects (id, workspace_id, client_id, name, hourly_rate_minor) values ($1, $2, $3, $4, $5)`,
-      [randomUUID(), ws, clientId, name, rate]);
+    const tw = twProjectId ? (await loadCatalog(c, user.id))?.projects.find(p => p.id === twProjectId) ?? null : null;
+    await c.query(`insert into projects (id, workspace_id, client_id, name, hourly_rate_minor, tw_project_id, tw_project) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [randomUUID(), ws, clientId, name, rate, tw?.id ?? null, tw?.name ?? null]);
   });
   revalidatePath('/work');
 }
@@ -1011,12 +1014,15 @@ export async function startTimer(formData: FormData) {
   const note = text(formData.get('note'), 160);
   if (!isUuid(projectId)) return;
   await withUser(user.id, async c => {
+    const tw = await pickFromForm(c, user.id, projectId, formData.get('twTaskId'));
     await c.query(
       `insert into user_settings (user_id, work_timer) values ($1, $2)
        on conflict (user_id) do update set work_timer = excluded.work_timer, updated_at = now()`,
-      [user.id, JSON.stringify({ projectId, note, startedAt: new Date().toISOString() })]);
+      [user.id, JSON.stringify({ projectId, note, startedAt: new Date().toISOString(),
+        ...(tw ? { twTaskId: tw.taskId, twTask: tw.task, twTasklist: tw.tasklist, twProject: tw.project } : {}) })]);
   });
   revalidatePath('/work');
+  revalidatePath('/today');
 }
 
 /** Stops the running timer and saves it as a time entry on the day it started (in the person's time zone). */
@@ -1025,7 +1031,7 @@ export async function stopTimer() {
   if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
   await withUser(user.id, async c => {
     const settings = await getSettings(c, user.id);
-    const row = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string } | null }>(
+    const row = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string; twTaskId?: number; twTask?: string; twTasklist?: string; twProject?: string } | null }>(
       `select work_timer from user_settings where user_id = $1`, [user.id])).rows[0];
     const t = row?.work_timer;
     if (!t) return;
@@ -1041,9 +1047,9 @@ export async function stopTimer() {
     const startMin = s.min;
     const minutes = Math.max(1, Math.min(1440 - startMin, Math.round((endMs - startMs) / 60000)));
     await c.query(
-      `insert into time_entries (id, workspace_id, user_id, project_id, spent_on, start_min, end_min, billable, note)
-       values ($1, $2, $3, $4, $5, $6, $7, true, $8)`,
-      [randomUUID(), ws, user.id, t.projectId, s.day, startMin, startMin + minutes, t.note]);
+      `insert into time_entries (id, workspace_id, user_id, project_id, spent_on, start_min, end_min, billable, note, tw_task_id, tw_task, tw_tasklist, tw_project)
+       values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12)`,
+      [randomUUID(), ws, user.id, t.projectId, s.day, startMin, startMin + minutes, t.note, t.twTaskId ?? null, t.twTask ?? null, t.twTasklist ?? null, t.twProject ?? null]);
     await c.query(`update user_settings set work_timer = null, updated_at = now() where user_id = $1`, [user.id]);
   });
   revalidatePath('/work');
@@ -1064,13 +1070,113 @@ export async function addTimeEntry(formData: FormData) {
   await withUser(user.id, async c => {
     const ws = await activeWorkspaceId(c, user.id);
     if (await weekIsApproved(c, ws, user.id, day)) return;
+    const tw = await pickFromForm(c, user.id, projectId, formData.get('twTaskId'));
     await c.query(
-      `insert into time_entries (id, workspace_id, user_id, project_id, spent_on, start_min, end_min, billable, note)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [randomUUID(), ws, user.id, projectId, day, start, end, billable, note]);
+      `insert into time_entries (id, workspace_id, user_id, project_id, spent_on, start_min, end_min, billable, note, tw_task_id, tw_task, tw_tasklist, tw_project)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [randomUUID(), ws, user.id, projectId, day, start, end, billable, note, tw?.taskId ?? null, tw?.task ?? null, tw?.tasklist ?? null, tw?.project ?? null]);
   });
   revalidatePath('/work');
   revalidatePath('/stats');
+  revalidatePath('/today');
+}
+
+/* ---------- Timesheet link (Autopilot / Teamwork) ---------- */
+
+/** Projects tab: point a project at a Teamwork project (empty = remove the link). */
+export async function linkProjectTeamwork(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const id = String(formData.get('id') ?? '');
+  const twProjectId = Number(formData.get('twProjectId') ?? 0) || null;
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    const tw = twProjectId ? (await loadCatalog(c, user.id))?.projects.find(p => p.id === twProjectId) ?? null : null;
+    if (twProjectId && !tw) return;
+    await c.query(`update projects set tw_project_id = $2, tw_project = $3 where id = $1 and deleted_at is null`, [id, tw?.id ?? null, tw?.name ?? null]);
+  });
+  revalidatePath('/work');
+}
+
+/** Time tab: set or change the Teamwork task of an entry that is not in the timesheet yet. */
+export async function setEntryTwTask(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    const row = (await c.query<{ project_id: string; spent_on: string; workspace_id: string; tw_logged_at: Date | null }>(
+      `select project_id, spent_on::text as spent_on, workspace_id, tw_logged_at from time_entries where id = $1 and user_id = $2 and deleted_at is null`, [id, user.id])).rows[0];
+    if (!row || row.tw_logged_at || await weekIsApproved(c, row.workspace_id, user.id, row.spent_on)) return;
+    const tw = await pickFromForm(c, user.id, row.project_id, formData.get('twTaskId'));
+    await c.query(`update time_entries set tw_task_id = $2, tw_task = $3, tw_tasklist = $4, tw_project = $5 where id = $1`, [id, tw?.taskId ?? null, tw?.task ?? null, tw?.tasklist ?? null, tw?.project ?? null]);
+  });
+  revalidatePath('/work');
+  revalidatePath('/today');
+}
+
+/** Today: plan a block of work (project + Teamwork task) at a time. */
+export async function addWorkPlan(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const projectId = String(formData.get('projectId') ?? '');
+  const day = String(formData.get('day') ?? '');
+  const start = parseHM(formData.get('start'));
+  const end = parseHM(formData.get('end'));
+  const note = text(formData.get('note'), 160);
+  if (!isUuid(projectId) || !isDateKey(day) || start === null || end === null || end <= start) return;
+  await withUser(user.id, async c => {
+    const ws = (await c.query<{ workspace_id: string }>(`select workspace_id from projects where id = $1 and deleted_at is null`, [projectId])).rows[0]?.workspace_id;
+    if (!ws) return;
+    const tw = await pickFromForm(c, user.id, projectId, formData.get('twTaskId'));
+    await c.query(
+      `insert into work_plans (user_id, workspace_id, day, start_min, end_min, project_id, tw_task_id, tw_task, tw_tasklist, tw_project, note)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [user.id, ws, day, start, end, projectId, tw?.taskId ?? null, tw?.task ?? null, tw?.tasklist ?? null, tw?.project ?? null, note]);
+  });
+  revalidatePath('/today');
+}
+
+/**
+ * Today: tick a planned block off. Done = it becomes a time entry (same project, task and times),
+ * which Autopilot then picks up. Undo removes that entry again, unless it is already in Teamwork
+ * or its week is approved.
+ */
+export async function toggleWorkPlan(formData: FormData) {
+  const user = await requireUser();
+  if (!(await withUser(user.id, async c => userHasPremium(c, user.id)))) return; // premium only
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => {
+    const p = (await c.query<{ workspace_id: string; day: string; start_min: number; end_min: number; project_id: string; tw_task_id: string | null; tw_task: string | null; tw_tasklist: string | null; tw_project: string | null; note: string; entry_id: string | null }>(
+      `select w.workspace_id, w.day::text as day, w.start_min, w.end_min, w.project_id, w.tw_task_id::text as tw_task_id, w.tw_task, w.tw_tasklist, w.tw_project, w.note, w.entry_id
+         from work_plans w where w.id = $1 and w.user_id = $2 and w.deleted_at is null`, [id, user.id])).rows[0];
+    if (!p || await weekIsApproved(c, p.workspace_id, user.id, p.day)) return;
+    const live = p.entry_id ? (await c.query<{ tw_logged_at: Date | null }>(
+      `select tw_logged_at from time_entries where id = $1 and deleted_at is null`, [p.entry_id])).rows[0] : undefined;
+    if (live) {
+      if (live.tw_logged_at) return; // already in the timesheet
+      await c.query(`update time_entries set deleted_at = now() where id = $1 and user_id = $2`, [p.entry_id, user.id]);
+      await c.query(`update work_plans set entry_id = null where id = $1`, [id]);
+      return;
+    }
+    const entryId = randomUUID();
+    await c.query(
+      `insert into time_entries (id, workspace_id, user_id, project_id, spent_on, start_min, end_min, billable, note, tw_task_id, tw_task, tw_tasklist, tw_project)
+       values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12)`,
+      [entryId, p.workspace_id, user.id, p.project_id, p.day, p.start_min, p.end_min, p.note, p.tw_task_id, p.tw_task, p.tw_tasklist, p.tw_project]);
+    await c.query(`update work_plans set entry_id = $2 where id = $1`, [id, entryId]);
+  });
+  revalidatePath('/today');
+  revalidatePath('/work');
+}
+
+export async function deleteWorkPlan(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get('id') ?? '');
+  if (!isUuid(id)) return;
+  await withUser(user.id, async c => { await c.query(`update work_plans set deleted_at = now() where id = $1 and user_id = $2`, [id, user.id]); });
+  revalidatePath('/today');
 }
 
 export async function deleteTimeEntry(formData: FormData) {

@@ -4,7 +4,7 @@ import { weekdayOf } from './time';
 import { activityStreaks } from './streaks';
 
 /** One row in the Today timeline. Items without a time are listed under "Anytime". */
-export type AgendaKind = 'routine' | 'meeting' | 'class' | 'task' | 'deadline' | 'reminder' | 'focus';
+export type AgendaKind = 'routine' | 'meeting' | 'class' | 'task' | 'deadline' | 'reminder' | 'focus' | 'work' | 'plan';
 export interface AgendaItem {
   key: string;
   kind: AgendaKind;
@@ -18,7 +18,11 @@ export interface AgendaItem {
   /** Scheduled days in a row this routine activity was done. */
   streak?: number;
   /** What the check box toggles, when the item can be ticked off from Today. */
-  toggle?: { action: 'event' | 'task' | 'deadline' | 'check'; id: string; kind?: 'meeting' | 'class' | 'reminder' | 'note' };
+  toggle?: { action: 'event' | 'task' | 'deadline' | 'check' | 'plan'; id: string; kind?: 'meeting' | 'class' | 'reminder' | 'note' };
+  /** A small status label, e.g. "In timesheet". */
+  badge?: { text: string; tone: 'success' | 'warn' | 'accent' | '' };
+  /** A planned work block that can be removed from Today. */
+  removePlan?: string;
 }
 
 export interface TodayTask { id: string; title: string; tag: string; dueDate: string | null; dueTime: number | null; done: boolean; overdue: boolean; repeat: string }
@@ -32,9 +36,16 @@ export interface TodayData {
   tasks: { overdue: TodayTask[]; today: TodayTask[]; anytime: TodayTask[]; doneToday: number };
   focus: { minutes: number; sessions: { title: string; minutes: number; atMin: number }[] };
   notes: { pinned: { id: string; title: string; snippet: string; done: boolean }[]; reminders: { id: string; title: string; atMin: number; done: boolean }[] };
-  work: { minutes: number; billableMinutes: number; timer: { project: string; note: string; startedAt: string } | null; meetings: number; openActions: number } | null;
+  work: { minutes: number; billableMinutes: number; timer: { project: string; note: string; startedAt: string; twTask: string | null } | null; meetings: number; openActions: number; plans: number } | null;
+  /** Only for people connected to Autopilot: Teamwork hours (sent by Autopilot) and what is still to send. */
+  timesheet: { loggedMinutes: number | null; targetMinutes: number | null; updatedAt: Date | null; unsentMinutes: number; unsentCount: number; noTaskCount: number } | null;
   spend: { totalMinor: number; count: number; monthMinor: number; budgetMinor: number | null } | null;
   nowMin: number | null;
+}
+
+/** The local date (YYYY-MM-DD) of a timestamp in the person's time zone. */
+function dayIn(tz: string, d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 
 /** Minutes after local midnight for a timestamp, in the person's time zone. */
@@ -49,6 +60,8 @@ function minutesIn(tz: string, d: Date): number {
  */
 export async function loadToday(c: PoolClient, o: {
   ws: string; userId: string; day: string; today: string; tz: string; premium: boolean; student: boolean; workMode: boolean; budgetMinor: number | null;
+  /** Connected to Autopilot: show Teamwork tasks and the timesheet card. */
+  autopilot?: boolean;
 }): Promise<TodayData> {
   const { ws, userId, day, today, tz, premium } = o;
   const isToday = day === today;
@@ -112,6 +125,7 @@ export async function loadToday(c: PoolClient, o: {
 
   // Meetings in any workspace the person belongs to (row-level security limits the rows), plus work time (premium)
   let work: TodayData['work'] = null;
+  let timesheet: TodayData['timesheet'] = null;
   if (premium) {
     const meetings = (await c.query<{ id: string; title: string; start_min: number | null; end_min: number | null; attendees: string; open_actions: number }>(
       `select m.id, m.title, m.start_min, m.end_min, m.attendees,
@@ -123,16 +137,62 @@ export async function loadToday(c: PoolClient, o: {
     const time = (await c.query<{ minutes: number; billable: number }>(
       `select coalesce(sum(end_min - start_min), 0)::int as minutes, coalesce(sum(end_min - start_min) filter (where billable), 0)::int as billable
          from time_entries where user_id = $1 and spent_on = $2 and deleted_at is null`, [userId, day])).rows[0];
-    const timerRow = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string } | null }>(
+    const timerRow = (await c.query<{ work_timer: { projectId: string; note: string; startedAt: string; twTask?: string } | null }>(
       `select work_timer from user_settings where user_id = $1`, [userId])).rows[0]?.work_timer ?? null;
     let timer: NonNullable<TodayData['work']>['timer'] = null;
     if (timerRow) {
       const p = (await c.query<{ name: string }>(`select name from projects where id = $1`, [timerRow.projectId])).rows[0];
-      timer = { project: p?.name ?? 'Project', note: timerRow.note, startedAt: timerRow.startedAt };
+      timer = { project: p?.name ?? 'Project', note: timerRow.note, startedAt: timerRow.startedAt, twTask: timerRow.twTask ?? null };
+      const started = new Date(timerRow.startedAt);
+      if (isToday && !Number.isNaN(started.getTime()) && dayIn(tz, started) === day) {
+        const s0 = minutesIn(tz, started), nowM = minutesIn(tz, new Date());
+        agenda.push({ key: 'timer', kind: 'work', startMin: s0, endMin: Math.max(s0 + 1, nowM), title: timer.note || timer.project,
+          emoji: '⏱️', meta: [timer.project, timer.twTask].filter(Boolean).join(' · '), done: false, href: '/work', badge: { text: 'Timer running', tone: 'accent' } });
+      }
     }
+
+    // Planned work blocks; a ticked-off block has a live time entry behind it.
+    const plans = (await c.query<{ id: string; start_min: number; end_min: number; note: string; project: string; tw_task: string | null; entry_id: string | null; logged: boolean }>(
+      `select w.id, w.start_min, w.end_min, w.note, p.name as project, w.tw_task, e.id as entry_id, (e.tw_logged_at is not null) as logged
+         from work_plans w join projects p on p.id = w.project_id
+         left join time_entries e on e.id = w.entry_id and e.deleted_at is null
+        where w.user_id = $1 and w.day = $2 and w.deleted_at is null order by w.start_min`, [userId, day])).rows;
+    const planned = new Set<string>();
+    for (const w of plans) {
+      if (w.entry_id) planned.add(w.entry_id);
+      agenda.push({ key: `w${w.id}`, kind: 'plan', startMin: w.start_min, endMin: w.end_min, title: w.note || w.tw_task || w.project, emoji: '🗂️',
+        meta: [w.project, o.autopilot ? w.tw_task ?? 'no Teamwork task' : null].filter(Boolean).join(' · '), done: !!w.entry_id,
+        toggle: { action: 'plan', id: w.id }, removePlan: w.entry_id ? undefined : w.id,
+        badge: o.autopilot && w.entry_id ? (w.logged ? { text: 'In timesheet', tone: 'success' } : { text: 'Not sent yet', tone: 'warn' }) : undefined });
+    }
+
+    // Time entries of the day, each on the timeline (blocks from a plan are already there).
+    const entries = (await c.query<{ id: string; start_min: number; end_min: number; note: string; billable: boolean; project: string; tw_task: string | null; logged: boolean }>(
+      `select e.id, e.start_min, e.end_min, e.note, e.billable, p.name as project, e.tw_task, (e.tw_logged_at is not null) as logged
+         from time_entries e join projects p on p.id = e.project_id
+        where e.user_id = $1 and e.spent_on = $2 and e.deleted_at is null order by e.start_min`, [userId, day])).rows;
+    for (const e of entries) {
+      if (planned.has(e.id)) continue;
+      agenda.push({ key: `te${e.id}`, kind: 'work', startMin: e.start_min, endMin: e.end_min, title: e.note || e.project, emoji: '💼',
+        meta: [e.project, o.autopilot ? e.tw_task ?? 'no Teamwork task' : null, `${e.end_min - e.start_min} min`, e.billable ? null : 'non-billable'].filter(Boolean).join(' · '),
+        done: false, href: '/work',
+        badge: o.autopilot ? (e.logged ? { text: 'In timesheet', tone: 'success' } : { text: 'Not sent yet', tone: e.tw_task ? 'warn' : '' }) : undefined });
+    }
+
+    if (o.autopilot) {
+      const ts = (await c.query<{ logged_minutes: number; target_minutes: number | null; updated_at: Date }>(
+        `select logged_minutes, target_minutes, updated_at from timesheet_days where user_id = $1 and day = $2`, [userId, day])).rows[0];
+      const target = ts?.target_minutes ?? (await c.query<{ t: number | null }>(`select target_minutes as t from timesheet_catalog where user_id = $1`, [userId])).rows[0]?.t ?? null;
+      const unsent = entries.filter(e => !e.logged);
+      timesheet = {
+        loggedMinutes: ts ? ts.logged_minutes : null, targetMinutes: target, updatedAt: ts?.updated_at ?? null,
+        unsentMinutes: unsent.reduce((a, e) => a + e.end_min - e.start_min, 0), unsentCount: unsent.length, noTaskCount: unsent.filter(e => !e.tw_task).length,
+      };
+    }
+
     const openActions = meetings.reduce((s, m) => s + m.open_actions, 0);
-    if (o.workMode || meetings.length || time.minutes || timer) {
-      work = { minutes: time.minutes, billableMinutes: time.billable, timer, meetings: meetings.length, openActions };
+    if (o.workMode || o.autopilot || meetings.length || time.minutes || timer || plans.length) {
+      work = { minutes: time.minutes, billableMinutes: time.billable, timer, meetings: meetings.length, openActions, plans: plans.length };
     }
   }
 
@@ -167,7 +227,7 @@ export async function loadToday(c: PoolClient, o: {
     routineDone: routine.events.filter(e => e.done).length, routineTotal: routine.events.length,
     agenda,
     tasks: { overdue, today: dueToday, anytime, doneToday },
-    focus, notes: { pinned, reminders }, work, spend,
+    focus, notes: { pinned, reminders }, work, timesheet, spend,
     nowMin: isToday ? minutesIn(tz, new Date()) : null,
   };
 }

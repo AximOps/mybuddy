@@ -24,7 +24,11 @@ export default async function SettingsPage() {
     const settings = await getSettings(c, user!.id);
     const apps = (await c.query<{ id: string; client: string; created_at: string; last_used_at: string | null }>(
       `select id, client, created_at::text, last_used_at::text from app_grants where user_id = $1 and revoked_at is null order by created_at desc`, [user!.id])).rows;
-    return { apps, calendarToken: (await c.query<{ t: string | null }>(`select calendar_token as t from user_settings where user_id = $1`, [user!.id])).rows[0]?.t ?? null, settings, tags: await customTags(c, user!.id, 'task'), notes: await customTags(c, user!.id, 'note'), spend: await customTags(c, user!.id, 'spend'), today: dateKeyIn(settings.timezone) };
+    const twCat = (await c.query<{ n: number; t: number; updated_at: string }>(
+      `select jsonb_array_length(projects)::int as n,
+              (select coalesce(sum(jsonb_array_length(coalesce(x->'tasks', '[]'::jsonb))), 0)::int from jsonb_array_elements(projects) x) as t,
+              updated_at::text from timesheet_catalog where user_id = $1`, [user!.id])).rows[0] ?? null;
+    return { twCat, apps, calendarToken: (await c.query<{ t: string | null }>(`select calendar_token as t from user_settings where user_id = $1`, [user!.id])).rows[0]?.t ?? null, settings, tags: await customTags(c, user!.id, 'task'), notes: await customTags(c, user!.id, 'note'), spend: await customTags(c, user!.id, 'spend'), today: dateKeyIn(settings.timezone) };
   });
   const { settings } = data;
   const h = await headers();
@@ -146,9 +150,10 @@ export default async function SettingsPage() {
               <div key={a.id} className="row" style={{ justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div>
                   <b>{a.client === 'autopilot' ? 'Autopilot by Opseros' : a.client}</b>
-                  <div className="small muted">Reads your time entries, meetings, focus sessions and finished to-dos for your Teamwork timesheet.
+                  <div className="small muted">Reads your time entries, meetings, focus sessions and finished to-dos for your Teamwork timesheet, and marks the entries it has logged.
                     Connected {new Date(a.created_at).toLocaleDateString('en-IN', { timeZone: settings.timezone, day: 'numeric', month: 'short', year: 'numeric' })}
                     {a.last_used_at ? ` · last used ${new Date(a.last_used_at).toLocaleString('en-IN', { timeZone: settings.timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}</div>
+                  {a.client === 'autopilot' ? <div className="small muted">{data.twCat ? `Teamwork tasks: ${data.twCat.t} in ${data.twCat.n} projects, sent ${new Date(data.twCat.updated_at).toLocaleString('en-IN', { timeZone: settings.timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.` : 'Teamwork tasks not sent yet: in Autopilot open Settings → MyBuddy → Send my Teamwork tasks.'}</div> : null}
                 </div>
                 <form action={disconnectApp}><input type="hidden" name="id" value={a.id} /><button className="btn sm ghost danger" type="submit">Disconnect</button></form>
               </div>
