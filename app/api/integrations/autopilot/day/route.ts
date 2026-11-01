@@ -2,12 +2,17 @@ import { json, userFromBearer } from '@/lib/connected-apps';
 import { withUser } from '@/lib/db';
 import { getSettings } from '@/lib/settings';
 import { isDateKey } from '@/lib/time';
+import { loadCatalog, taskRemoved } from '@/lib/timesheet';
 
 export const dynamic = 'force-dynamic';
 
 /** The Teamwork task (and project) a row points to, or null. */
 const tw = (r: { tw_task_id: string | null; tw_task: string | null; tw_tasklist: string | null; tw_project_id: string | null; tw_project: string | null }) =>
   r.tw_task_id ? { taskId: Number(r.tw_task_id), task: r.tw_task ?? '', tasklist: r.tw_tasklist ?? '', projectId: r.tw_project_id ? Number(r.tw_project_id) : null, project: r.tw_project ?? '' } : null;
+
+/** Adds removed: true when the task is no longer in Teamwork (not in the list Autopilot last sent). */
+const twOut = (x: ReturnType<typeof tw>, cat: Awaited<ReturnType<typeof loadCatalog>>, logged: boolean) =>
+  x ? { ...x, removed: !logged && taskRemoved(cat, x.taskId) } : null;
 
 const hhmm = (m: number | null) => (m == null ? null : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
 
@@ -72,7 +77,8 @@ export async function GET(req: Request) {
         where w.user_id = $1 and w.day = $2 and w.deleted_at is null and e.id is null
         order by w.start_min`, [user.id, date])).rows;
 
-    return { tz, timeEntries, meetings, focus, tasksDone, plans };
+    const catalog = await loadCatalog(c, user.id);
+    return { tz, timeEntries, meetings, focus, tasksDone, plans, catalog };
   });
 
   return json({
@@ -80,8 +86,8 @@ export async function GET(req: Request) {
     timezone: data.tz,
     timeEntries: data.timeEntries.map(t => ({ id: t.id, projectId: t.project_id, project: t.project, client: t.client, workspace: t.workspace,
       start: hhmm(t.start_min), end: hhmm(t.end_min), minutes: t.end_min - t.start_min, billable: t.billable, note: t.note,
-      teamwork: tw(t), loggedAt: t.tw_logged_at ? t.tw_logged_at.toISOString() : null, logId: t.tw_log_id ? Number(t.tw_log_id) : null })),
-    plans: data.plans.map(w => ({ id: w.id, project: w.project, start: hhmm(w.start_min), end: hhmm(w.end_min), minutes: w.end_min - w.start_min, note: w.note, teamwork: tw(w) })),
+      teamwork: twOut(tw(t), data.catalog, !!t.tw_logged_at), loggedAt: t.tw_logged_at ? t.tw_logged_at.toISOString() : null, logId: t.tw_log_id ? Number(t.tw_log_id) : null })),
+    plans: data.plans.map(w => ({ id: w.id, project: w.project, start: hhmm(w.start_min), end: hhmm(w.end_min), minutes: w.end_min - w.start_min, note: w.note, teamwork: twOut(tw(w), data.catalog, false) })),
     meetings: data.meetings.map(m => ({ id: m.id, title: m.title, start: hhmm(m.start_min), end: hhmm(m.end_min),
       minutes: m.start_min != null && m.end_min != null ? m.end_min - m.start_min : null, attendees: m.attendees, workspace: m.workspace, shared: m.kind !== 'personal' })),
     focus: data.focus.map(f => {

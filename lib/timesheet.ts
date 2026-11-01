@@ -62,6 +62,15 @@ export function findTask(cat: TwCatalog | null, taskId: number | null): TwPick |
 }
 
 /**
+ * True when a Teamwork task is no longer in the list Autopilot last sent (deleted or completed in
+ * Teamwork). Unknown (no list) counts as not removed.
+ */
+export function taskRemoved(cat: TwCatalog | null, taskId: number | string | null): boolean {
+  const id = Number(taskId);
+  return !!cat && !!id && !cat.projects.some(p => p.tasks.some(t => t.id === id));
+}
+
+/**
  * The Teamwork task chosen in a form (field twTaskId), checked against the person's catalog.
  * When the My Buddy project has no Teamwork project yet, it is linked to this task's project,
  * so the next entry for it starts with the right list.

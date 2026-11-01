@@ -6,7 +6,7 @@ import { CalendarPlus, Video } from 'lucide-react';
 import { MEET_NEW_URL, callLabel } from '@/lib/meeting-link';
 import { Elapsed } from '@/components/work/Elapsed';
 import { TwTaskPicker } from '@/components/work/TwTaskPicker';
-import { autopilotHome, autopilotLinked, loadCatalog, type TwProject } from '@/lib/timesheet';
+import { autopilotHome, autopilotLinked, loadCatalog, taskRemoved, type TwProject } from '@/lib/timesheet';
 import { withUser } from '@/lib/db';
 import { getCurrentUser } from '@/lib/session';
 import { getSettings, money } from '@/lib/settings';
@@ -210,11 +210,13 @@ async function WorkPageContent({ searchParams }: { searchParams: Promise<Record<
                         {tw ? (e.tw_logged_at ? <div className="small"><span className="badge success">✓ In timesheet</span> {e.tw_task}</div>
                           : (
                             <details className="assign tw-task">
-                              <summary className="small">{e.tw_task ? <>Teamwork: <strong>{e.tw_task}</strong></> : <span className="muted">+ Teamwork task</span>}</summary>
+                              <summary className="small">{e.tw_task ? <>Teamwork: <strong>{e.tw_task}</strong></> : <span className="muted">+ Teamwork task</span>}
+                                {taskRemoved(data.catalog, e.tw_task_id) ? <> <span className="badge danger">Task removed in Teamwork — pick another</span></> : null}</summary>
                               <form action={setEntryTwTask} className="assign-pop">
                                 <input type="hidden" name="id" value={e.id} />
                                 <label className="field">Teamwork task
-                                  <select className="select" name="twTaskId" defaultValue={e.tw_task_id ?? ''}><option value="">— Not for the timesheet —</option>{twGroups}</select>
+                                  <select className="select" name="twTaskId" defaultValue={e.tw_task_id ?? ''}><option value="">— Not for the timesheet —</option>
+                                    {taskRemoved(data.catalog, e.tw_task_id) ? <option value={e.tw_task_id!} disabled>⚠ {e.tw_task} (removed in Teamwork)</option> : null}{twGroups}</select>
                                 </label>
                                 <button className="btn primary sm" type="submit">Save</button>
                               </form>

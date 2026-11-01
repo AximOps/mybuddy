@@ -29,3 +29,11 @@ export async function POST(req: Request) {
   });
   return json({ ok: true, projects: projects.length, tasks: projects.reduce((a, p) => a + p.tasks.length, 0) });
 }
+
+/** "Remove from MyBuddy" in Autopilot: deletes the task list. Time entries keep their Teamwork task. */
+export async function DELETE(req: Request) {
+  const user = await userFromBearer(req);
+  if (!user) return json({ error: 'invalid_token' }, 401);
+  await withUser(user.id, async c => { await c.query(`delete from timesheet_catalog where user_id = $1`, [user.id]); });
+  return json({ ok: true });
+}

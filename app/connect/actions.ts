@@ -38,7 +38,16 @@ export async function disconnectApp(formData: FormData) {
   const user = await getCurrentUser();
   if (!user || !isUuid(id)) return;
   await withUser(user.id, async c => {
-    await c.query(`update app_grants set revoked_at = now() where id = $1 and user_id = $2 and revoked_at is null`, [id, user.id]);
+    const r = await c.query<{ client: string }>(
+      `update app_grants set revoked_at = now() where id = $1 and user_id = $2 and revoked_at is null returning client`, [id, user.id]);
+    // Disconnecting Autopilot also removes the Teamwork task list and hours it sent.
+    if (r.rows[0]?.client === AUTOPILOT) {
+      const still = (await c.query(`select 1 from app_grants where user_id = $1 and client = $2 and revoked_at is null`, [user.id, AUTOPILOT])).rowCount;
+      if (!still) {
+        await c.query(`delete from timesheet_catalog where user_id = $1`, [user.id]);
+        await c.query(`delete from timesheet_days where user_id = $1`, [user.id]);
+      }
+    }
   });
   revalidatePath('/settings');
 }

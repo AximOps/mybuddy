@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import { routineForDay } from './planner';
 import { weekdayOf } from './time';
 import { activityStreaks } from './streaks';
+import { loadCatalog, taskRemoved } from './timesheet';
 
 /** One row in the Today timeline. Items without a time are listed under "Anytime". */
 export type AgendaKind = 'routine' | 'meeting' | 'class' | 'task' | 'deadline' | 'reminder' | 'focus' | 'work' | 'plan';
@@ -20,7 +21,7 @@ export interface AgendaItem {
   /** What the check box toggles, when the item can be ticked off from Today. */
   toggle?: { action: 'event' | 'task' | 'deadline' | 'check' | 'plan'; id: string; kind?: 'meeting' | 'class' | 'reminder' | 'note' };
   /** A small status label, e.g. "In timesheet". */
-  badge?: { text: string; tone: 'success' | 'warn' | 'accent' | '' };
+  badge?: { text: string; tone: 'success' | 'warn' | 'accent' | 'danger' | '' };
   /** A planned work block that can be removed from Today. */
   removePlan?: string;
 }
@@ -152,8 +153,10 @@ export async function loadToday(c: PoolClient, o: {
     }
 
     // Planned work blocks; a ticked-off block has a live time entry behind it.
-    const plans = (await c.query<{ id: string; start_min: number; end_min: number; note: string; project: string; tw_task: string | null; entry_id: string | null; logged: boolean }>(
-      `select w.id, w.start_min, w.end_min, w.note, p.name as project, w.tw_task, e.id as entry_id, (e.tw_logged_at is not null) as logged
+    const cat = o.autopilot ? await loadCatalog(c, userId) : null;
+    const gone = (id: string | null, logged: boolean) => !logged && taskRemoved(cat, id);
+    const plans = (await c.query<{ id: string; start_min: number; end_min: number; note: string; project: string; tw_task: string | null; tw_task_id: string | null; entry_id: string | null; logged: boolean }>(
+      `select w.id, w.start_min, w.end_min, w.note, p.name as project, w.tw_task, w.tw_task_id::text as tw_task_id, e.id as entry_id, (e.tw_logged_at is not null) as logged
          from work_plans w join projects p on p.id = w.project_id
          left join time_entries e on e.id = w.entry_id and e.deleted_at is null
         where w.user_id = $1 and w.day = $2 and w.deleted_at is null order by w.start_min`, [userId, day])).rows;
@@ -163,12 +166,13 @@ export async function loadToday(c: PoolClient, o: {
       agenda.push({ key: `w${w.id}`, kind: 'plan', startMin: w.start_min, endMin: w.end_min, title: w.note || w.tw_task || w.project, emoji: '🗂️',
         meta: [w.project, o.autopilot ? w.tw_task ?? 'no Teamwork task' : null].filter(Boolean).join(' · '), done: !!w.entry_id,
         toggle: { action: 'plan', id: w.id }, removePlan: w.entry_id ? undefined : w.id,
-        badge: o.autopilot && w.entry_id ? (w.logged ? { text: 'In timesheet', tone: 'success' } : { text: 'Not sent yet', tone: 'warn' }) : undefined });
+        badge: o.autopilot && gone(w.tw_task_id, w.logged) ? { text: 'Task removed in Teamwork', tone: 'danger' }
+          : o.autopilot && w.entry_id ? (w.logged ? { text: 'In timesheet', tone: 'success' } : { text: 'Not sent yet', tone: 'warn' }) : undefined });
     }
 
     // Time entries of the day, each on the timeline (blocks from a plan are already there).
-    const entries = (await c.query<{ id: string; start_min: number; end_min: number; note: string; billable: boolean; project: string; tw_task: string | null; logged: boolean }>(
-      `select e.id, e.start_min, e.end_min, e.note, e.billable, p.name as project, e.tw_task, (e.tw_logged_at is not null) as logged
+    const entries = (await c.query<{ id: string; start_min: number; end_min: number; note: string; billable: boolean; project: string; tw_task: string | null; tw_task_id: string | null; logged: boolean }>(
+      `select e.id, e.start_min, e.end_min, e.note, e.billable, p.name as project, e.tw_task, e.tw_task_id::text as tw_task_id, (e.tw_logged_at is not null) as logged
          from time_entries e join projects p on p.id = e.project_id
         where e.user_id = $1 and e.spent_on = $2 and e.deleted_at is null order by e.start_min`, [userId, day])).rows;
     for (const e of entries) {
@@ -176,7 +180,8 @@ export async function loadToday(c: PoolClient, o: {
       agenda.push({ key: `te${e.id}`, kind: 'work', startMin: e.start_min, endMin: e.end_min, title: e.note || e.project, emoji: '💼',
         meta: [e.project, o.autopilot ? e.tw_task ?? 'no Teamwork task' : null, `${e.end_min - e.start_min} min`, e.billable ? null : 'non-billable'].filter(Boolean).join(' · '),
         done: false, href: '/work',
-        badge: o.autopilot ? (e.logged ? { text: 'In timesheet', tone: 'success' } : { text: 'Not sent yet', tone: e.tw_task ? 'warn' : '' }) : undefined });
+        badge: o.autopilot && gone(e.tw_task_id, e.logged) ? { text: 'Task removed in Teamwork', tone: 'danger' }
+          : o.autopilot ? (e.logged ? { text: 'In timesheet', tone: 'success' } : { text: 'Not sent yet', tone: e.tw_task ? 'warn' : '' }) : undefined });
     }
 
     if (o.autopilot) {

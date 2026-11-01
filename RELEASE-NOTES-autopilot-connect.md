@@ -46,3 +46,11 @@ Autopilot reads a day's time entries, meetings, focus sessions and finished to-d
 - New Autopilot endpoints: POST /api/integrations/autopilot/catalog, /status, /logged. The day endpoint now
   returns `teamwork`, `loggedAt`, `logId` on time entries, and `plans`.
 - Deploy: `npm run db:migrate` (adds 0024), then redeploy. No new environment variables.
+
+## Timesheet clean-up (migration 0025)
+- Disconnecting Autopilot (MyBuddy Settings or Autopilot) deletes the Teamwork task list and hours it sent.
+  Time entries keep their Teamwork task and "In timesheet" mark.
+- DELETE /api/integrations/autopilot/catalog ("Remove from MyBuddy" in Autopilot).
+- Entries/plans whose Teamwork task is no longer in the list show "Task removed in Teamwork"; the day
+  endpoint returns `teamwork.removed: true` for them.
+- Deploy: `npm run db:migrate` (adds 0025), then redeploy.
